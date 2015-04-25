@@ -12,6 +12,7 @@ import System.Process
 import System.IO
 import Data.List
 import Data.Char
+import Data.IORef (newIORef, modifyIORef, readIORef)
 import Debug.Trace
 import qualified System.Directory as Directory
 import qualified Data.ByteString.Base16 as B16
@@ -45,17 +46,29 @@ pipeline input transform = do
   
 --
 
+-- compatibility with os.walk semantics
 walkDirectory :: FilePath -> TMQueue FilePath -> IO ()
 walkDirectory here fileQueue = do
   entries <- Directory.getDirectoryContents here
+  directories <- newIORef []
+  files <- newIORef []
+  
   forM_ (sort entries) $ \entry -> do
     let fullPath = combine here entry
     isDirectory <- Directory.doesDirectoryExist fullPath
     isFile <- Directory.doesFileExist fullPath
     when (isDirectory && entry /= "." && entry /= "..") $ do
-      walkDirectory fullPath fileQueue
+      modifyIORef directories (fullPath:)
     when isFile $ do
-      atomically $ writeTMQueue fileQueue fullPath
+      modifyIORef files (fullPath:)
+      
+  ds <- fmap sort $ readIORef directories
+  fs <- fmap sort $ readIORef files
+
+  forM_ fs $ \file -> do
+    atomically $ writeTMQueue fileQueue file
+  forM_ ds $ \dir -> do
+    walkDirectory dir fileQueue
 
 type Hash = BS.ByteString
 data HashResult = HashResult FilePath Hash
