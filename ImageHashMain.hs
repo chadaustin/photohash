@@ -1,3 +1,7 @@
+import System.IO
+import qualified System.Directory as Directory
+import System.Environment
+
 import ImageHash
 
 main :: IO ()
