@@ -47,6 +47,7 @@ pipeline input transform = do
   
 --
 
+-- compatibility with Python's os.walk semantics
 walk :: FilePath -> ((FilePath, [FilePath], [FilePath]) -> IO ()) -> IO ()
 walk root action = do
   entries <- Directory.getDirectoryContents root
@@ -70,7 +71,6 @@ walk root action = do
   forM_ ds $ \dir ->
     walk (combine root dir) action
 
--- compatibility with os.walk semantics
 walkDirectory :: FilePath -> TMQueue FilePath -> IO ()
 walkDirectory here fileQueue = do
   walk here $ \(dirpath, _dirnames, filenames) -> do
@@ -199,5 +199,6 @@ main = do
     _ -> return args
     
   fileQueue <- readFileList paths
-  resultQueue <- pipeline fileQueue $ hashFile (cpuQueue, diskQueue)
+  let hasher = hashFile (cpuQueue, diskQueue)
+  resultQueue <- pipeline fileQueue hasher
   processQueue resultQueue printHashResult
