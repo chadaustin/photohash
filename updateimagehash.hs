@@ -27,7 +27,7 @@ excludedFiles = [
 parse :: String -> Maybe (FilePath, ByteString)
 parse line =
   case words line of
-    [h, p] -> if "*" `List.isPrefixOf` p then Just (drop 1 p, BSC.pack h) else Nothing
+    [h, p] -> if "*./" `List.isPrefixOf` p then Just (drop 3 p, BSC.pack h) else Nothing
     _ -> Nothing
 
 readHashes :: FilePath -> IO [(FilePath, ByteString)]
@@ -52,12 +52,12 @@ updateHashes hasher root original = do
 
   hashes <- newIORef Map.empty
 
-  putStrLn "scanning"
+  putStr "scanning: "
 
   -- find unknown hashes and insert into job queue
   walk root $ \(dirpath, dirnames, filenames) -> do
-    forM_ (map (combine dirpath) (filter (`notElem` excludedFiles) filenames)) $ \fullPath -> do
-      putChar '.'
+    putChar '.'
+    forM_ (map (normalise . combine dirpath) (filter (`notElem` excludedFiles) filenames)) $ \fullPath -> do
       case Map.lookup fullPath original of
         Nothing -> atomically $ writeTMQueue fileQueue fullPath
         Just hash -> modifyIORef hashes $ Map.insert fullPath hash
@@ -66,14 +66,14 @@ updateHashes hasher root original = do
 
   -- remove hashes not in map
   h <- readIORef hashes
-  forM (Map.toList $ Map.difference original h) $ \path -> do
+  forM (Map.toList $ Map.difference original h) $ \(path, hash) -> do
     putStrLn $ "removed: " ++ show path
   
   -- consume results and update hash map
   hashes <- newIORef original
   processQueue resultQueue $ \mv -> do
     HashResult path hash <- readMVar mv
-    putStrLn $ "added: " ++ show path
+    putStrLn $ "added: " ++ path ++ " " ++ BSC.unpack hash
     modifyIORef hashes $ Map.insert path hash
         
   readIORef hashes
