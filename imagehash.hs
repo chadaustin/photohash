@@ -18,6 +18,7 @@ import qualified System.Directory as Directory
 import qualified Data.ByteString.Base16 as B16
 import qualified System.Process as Process
 import GHC.Conc
+import System.Environment (getArgs)
 
 -- Generic TMQueue utilities
 
@@ -51,7 +52,6 @@ walkDirectory :: FilePath -> TMQueue FilePath -> IO ()
 walkDirectory here fileQueue = do
   entries <- Directory.getDirectoryContents here
   directories <- newIORef []
-  files <- newIORef []
   
   forM_ (sort entries) $ \entry -> do
     let fullPath = combine here entry
@@ -60,14 +60,10 @@ walkDirectory here fileQueue = do
     when (isDirectory && entry /= "." && entry /= "..") $ do
       modifyIORef directories (fullPath:)
     when isFile $ do
-      modifyIORef files (fullPath:)
+      atomically $ writeTMQueue fileQueue fullPath
       
-  ds <- fmap sort $ readIORef directories
-  fs <- fmap sort $ readIORef files
-
-  forM_ fs $ \file -> do
-    atomically $ writeTMQueue fileQueue file
-  forM_ ds $ \dir -> do
+  ds <- readIORef directories
+  forM_ (sort ds) $ \dir -> do
     walkDirectory dir fileQueue
 
 type Hash = BS.ByteString
@@ -161,10 +157,11 @@ hashFile queues path = do
   let hasher = getHashFunction queues path
   hasher path
 
-readFileList here = do
+readFileList paths = do
   fileQueue <- newTMQueueIO
   forkIO $ do
-    walkDirectory here fileQueue
+    forM_ paths $ \path ->
+      walkDirectory path fileQueue
     atomically $ closeTMQueue fileQueue
   return fileQueue
 
@@ -191,7 +188,13 @@ main = do
   cpuQueue <- newRunnerQueue cpuConcurrencyCount
   diskQueue <- newRunnerQueue diskConcurrencyCount
 
-  -- here <- Directory.getCurrentDirectory
-  fileQueue <- readFileList "."
+  args <- getArgs
+  paths <- case args of
+    [] -> do
+      here <- Directory.getCurrentDirectory
+      return [here]
+    _ -> return args
+    
+  fileQueue <- readFileList paths
   resultQueue <- pipeline fileQueue $ hashFile (cpuQueue, diskQueue)
   processQueue resultQueue printHashResult

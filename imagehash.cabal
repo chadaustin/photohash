@@ -11,4 +11,5 @@ cabal-version:       >=1.8
 executable imagehash
   main-is: imagehash.hs
   -- other-modules:       
-  build-depends:       base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash
+  build-depends: base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash
+  ghc-options: -threaded
