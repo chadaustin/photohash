@@ -47,24 +47,36 @@ pipeline input transform = do
   
 --
 
+walk :: FilePath -> ((FilePath, [FilePath], [FilePath]) -> IO ()) -> IO ()
+walk root action = do
+  entries <- Directory.getDirectoryContents root
+  directories <- newIORef []
+  files <- newIORef []
+  
+  forM_ entries $ \entry -> do
+    let fullPath = combine root entry
+    isFile <- Directory.doesFileExist fullPath
+    if isFile then
+      modifyIORef files (entry:)
+     else do
+      when (entry /= "." && entry /= "..") $ do
+        isDirectory <- Directory.doesDirectoryExist fullPath
+        when isDirectory $ modifyIORef directories (entry:)
+
+  ds <- readIORef directories
+  fs <- readIORef files
+  action (root, sort ds, sort fs)
+
+  forM_ ds $ \dir ->
+    walk (combine root dir) action
+
 -- compatibility with os.walk semantics
 walkDirectory :: FilePath -> TMQueue FilePath -> IO ()
 walkDirectory here fileQueue = do
-  entries <- Directory.getDirectoryContents here
-  directories <- newIORef []
-  
-  forM_ (sort entries) $ \entry -> do
-    let fullPath = combine here entry
-    isDirectory <- Directory.doesDirectoryExist fullPath
-    isFile <- Directory.doesFileExist fullPath
-    when (isDirectory && entry /= "." && entry /= "..") $ do
-      modifyIORef directories (fullPath:)
-    when isFile $ do
-      atomically $ writeTMQueue fileQueue fullPath
-      
-  ds <- readIORef directories
-  forM_ (sort ds) $ \dir -> do
-    walkDirectory dir fileQueue
+  walk here $ \(dirpath, _dirnames, filenames) -> do
+    let fns = map (combine dirpath) filenames
+    forM_ fns $ \fn ->
+      atomically $ writeTMQueue fileQueue fn
 
 type Hash = BS.ByteString
 data HashResult = HashResult FilePath Hash
