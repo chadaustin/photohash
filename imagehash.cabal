@@ -9,11 +9,11 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable imagehash
-  main-is: imagehash.hs
+  main-is: ImageHashMain.hs
   build-depends: base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash
   ghc-options: -threaded
 
 executable updateimagehash
   main-is: updateimagehash.hs
-  build-depends: base
+  build-depends: base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash, containers
   ghc-options: -threaded

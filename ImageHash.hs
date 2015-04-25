@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+module ImageHash where
+
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
@@ -177,8 +179,9 @@ newRunnerQueue concurrency = do
   replicateM_ concurrency $ forkJobRunnerOnQueue queue
   return queue
 
-main :: IO ()
-main = do
+type Hasher = FilePath -> IO (MVar HashResult)
+makeHasher :: IO Hasher
+makeHasher = do
   -- TODO: measure SSD/spinny/NAS optimal concurrency
   let diskConcurrencyCount = 1
 
@@ -186,19 +189,8 @@ main = do
   cpuConcurrencyCount <- getNumProcessors
   setNumCapabilities cpuConcurrencyCount
 
-  hSetBuffering stdout NoBuffering
-
   cpuQueue <- newRunnerQueue cpuConcurrencyCount
   diskQueue <- newRunnerQueue diskConcurrencyCount
+  
+  return $ hashFile (cpuQueue, diskQueue)
 
-  args <- getArgs
-  paths <- case args of
-    [] -> do
-      here <- Directory.getCurrentDirectory
-      return [here]
-    _ -> return args
-    
-  fileQueue <- readFileList paths
-  let hasher = hashFile (cpuQueue, diskQueue)
-  resultQueue <- pipeline fileQueue hasher
-  processQueue resultQueue printHashResult
