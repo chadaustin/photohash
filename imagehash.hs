@@ -1,24 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Monad
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Data.ByteString.Char8 as BS
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
-import System.FilePath
+import Control.Monad
 import Data.ByteString.Char8 (unpack)
-import System.Process
-import System.IO
-import Data.List
 import Data.Char
 import Data.IORef (newIORef, modifyIORef, readIORef)
+import Data.List
 import Debug.Trace
-import qualified System.Directory as Directory
-import qualified Data.ByteString.Base16 as B16
-import qualified System.Process as Process
 import GHC.Conc
 import System.Environment (getArgs)
+import System.FilePath
+import System.IO
+import System.Process
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as BS
+import qualified System.Directory as Directory
+import qualified System.Process as Process
 
 -- Generic TMQueue utilities
 
@@ -88,15 +88,6 @@ sha1Hash :: JobQueue -> HashFunction
 sha1Hash diskQueue path = runOnQueue diskQueue $ do
   contents <- BS.readFile path
   return $ HashResult path $ B16.encode $ SHA1.hash contents
-
-{-
-
-djpeg $options -bmp $fn | sha1sum
-jpegtran -rotate 90 $fn | djpeg $options -bmp | sha1sum
-jpegtran -rotate 180 $fn | djpeg $options -bmp | sha1sum
-jpegtran -rotate 270 $fn | djpeg $options -bmp | sha1sum
-
--}
 
 pipe' :: StdStream -> [[String]] -> IO Handle
 pipe' stdin [(cmd:args)] = do
