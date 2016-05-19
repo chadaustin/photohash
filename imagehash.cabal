@@ -10,10 +10,10 @@ cabal-version:       >=1.8
 
 executable imagehash
   main-is: ImageHashMain.hs
-  build-depends: base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash
-  ghc-options: -threaded
+  build-depends: base, process, bytestring, base16-bytestring, directory, pathwalk, filepath, stm, stm-chans, cryptohash
+  ghc-options: -threaded -Wall
 
 executable updateimagehash
   main-is: updateimagehash.hs
-  build-depends: base, process, bytestring, base16-bytestring, directory, filepath, stm, stm-chans, cryptohash, containers
-  ghc-options: -threaded
+  build-depends: base, process, bytestring, base16-bytestring, directory, pathwalk, filepath, stm, stm-chans, cryptohash, containers
+  ghc-options: -threaded -Wall

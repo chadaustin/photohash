@@ -5,7 +5,7 @@ import Data.ByteString (ByteString)
 import qualified Data.List as List
 import qualified Data.ByteString.Char8 as BSC
 import Data.IORef
-import Control.Exception
+import Control.Exception (tryJust)
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
@@ -15,9 +15,11 @@ import System.IO
 import System.IO.Error
 import System.FilePath
 import System.Directory
+import System.Directory.PathWalk (pathWalk)
 
 import ImageHash
 
+excludedFiles :: [String]
 excludedFiles = [
   "Picasa.ini",
   "Thumbs.db",
@@ -40,8 +42,8 @@ readHashes path = do
 writeHashes :: FilePath -> [(FilePath, ByteString)] -> IO ()
 writeHashes path hashes = do
   withFile (path ++ ".new") WriteMode $ \handle -> do
-    forM_ hashes $ \(path, hash) ->
-      hPutStrLn handle $ (BSC.unpack hash) ++ " *./" ++ path
+    forM_ hashes $ \(path', hash) ->
+      hPutStrLn handle $ (BSC.unpack hash) ++ " *./" ++ path'
 
   renameFile (path ++ ".new") path
 
@@ -55,7 +57,7 @@ updateHashes hasher root original = do
   putStr "scanning: "
 
   -- find unknown hashes and insert into job queue
-  walk root $ \(dirpath, dirnames, filenames) -> do
+  pathWalk root $ \dirpath _dirnames filenames -> do
     putChar '.'
     forM_ (map (normalise . combine dirpath) (filter (`notElem` excludedFiles) filenames)) $ \fullPath -> do
       case Map.lookup fullPath original of
@@ -66,17 +68,17 @@ updateHashes hasher root original = do
 
   -- remove hashes not in map
   h <- readIORef hashes
-  forM (Map.toList $ Map.difference original h) $ \(path, hash) -> do
+  forM_ (Map.toList $ Map.difference original h) $ \(path, _hash) -> do
     putStrLn $ "removed: " ++ show path
   
   -- consume results and update hash map
-  hashes <- newIORef original
+  newHashes <- newIORef original
   processQueue resultQueue $ \mv -> do
     HashResult path hash <- readMVar mv
     putStrLn $ "added: " ++ path ++ " " ++ BSC.unpack hash
-    modifyIORef hashes $ Map.insert path hash
+    modifyIORef newHashes $ Map.insert path hash
         
-  readIORef hashes
+  readIORef newHashes
 
 main :: IO ()
 main = do
