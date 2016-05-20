@@ -11,6 +11,7 @@ module ImageHash
        ) where
 
 import Control.Concurrent
+import Control.Concurrent.Async (Async, async, wait)
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
 import Control.Monad
@@ -56,25 +57,18 @@ pipeline input transform = do
 
 type Hash = BS.ByteString
 data HashResult = HashResult FilePath Hash
-type JobQueue = TQueue (IO ())
+data JobRunner = JobRunner !(TMQueue (IO ())) ![Async ()]
 type HashFunction = FilePath -> IO (MVar HashResult)
 
-forkJobRunnerOnQueue :: JobQueue -> IO ()
-forkJobRunnerOnQueue queue = do
-  _ <- forkIO $ forever $ do
-    action <- atomically $ readTQueue queue
-    action
-  return ()
-
-runOnQueue :: JobQueue -> IO a -> IO (MVar a)
-runOnQueue queue action = do
+runOnQueue :: JobRunner -> IO a -> IO (MVar a)
+runOnQueue (JobRunner queue _) action = do
   result <- newEmptyMVar
-  atomically $ writeTQueue queue $ do
+  atomically $ writeTMQueue queue $ do
     r <- action
     putMVar result r
   return result
 
-sha1Hash :: JobQueue -> HashFunction
+sha1Hash :: JobRunner -> HashFunction
 sha1Hash diskQueue path = runOnQueue diskQueue $ do
   contents <- BS.readFile path
   return $ HashResult path $ B16.encode $ SHA1.hash contents
@@ -111,7 +105,7 @@ hashPipe commands = do
 djpegOptions :: [String]
 djpegOptions = ["-dct", "int", "-dither", "none", "-nosmooth"]
 
-imageHash :: JobQueue -> HashFunction
+imageHash :: JobRunner -> HashFunction
 imageHash queue path = do
   outputMVars <- mapM (runOnQueue queue . hashPipe) [
      [ ["djpeg"] ++ djpegOptions ++ ["-bmp", path] ],
@@ -128,7 +122,7 @@ imageHash queue path = do
     putMVar result $ HashResult path $ minimum pipes
   return result
 
-getHashFunction :: (JobQueue, JobQueue) -> FilePath -> HashFunction
+getHashFunction :: (JobRunner, JobRunner) -> FilePath -> HashFunction
 getHashFunction (cpuQueue, diskQueue) path =
   case (map toLower extension) of
     ".jpg" -> imageHash cpuQueue
@@ -136,7 +130,7 @@ getHashFunction (cpuQueue, diskQueue) path =
     _ -> sha1Hash diskQueue
   where extension = takeExtension path
 
-hashFile :: (JobQueue, JobQueue) -> FilePath -> IO (MVar HashResult)
+hashFile :: (JobRunner, JobRunner) -> FilePath -> IO (MVar HashResult)
 hashFile queues path = do
   let hasher = getHashFunction queues path
   hasher path
@@ -159,13 +153,27 @@ printHashResult result = do
   (HashResult path hash) <- takeMVar result
   putStrLn $ (unpack hash) ++ " *" ++ path
 
-newRunnerQueue :: Int -> IO (TQueue (IO ()))
-newRunnerQueue concurrency = do
-  queue <- newTQueueIO
-  replicateM_ concurrency $ forkJobRunnerOnQueue queue
-  return queue
+
+
+newJobRunner :: Int -> IO JobRunner
+newJobRunner concurrency = do
+  queue <- newTMQueueIO
+  runners <- replicateM concurrency $ do
+    async $ forever $ do
+      let loop = do
+            (atomically $ readTMQueue queue) >>= \case
+              Just action -> action >> loop
+              Nothing -> return ()
+      loop
+  return $ JobRunner queue runners
+
+stopJobRunner :: JobRunner -> IO ()
+stopJobRunner (JobRunner queue runners) = do
+  atomically $ closeTMQueue queue
+  forM_ runners wait
 
 type Hasher = FilePath -> IO (MVar HashResult)
+
 makeHasher :: IO Hasher
 makeHasher = do
   -- TODO: measure SSD/spinny/NAS optimal concurrency
@@ -175,8 +183,7 @@ makeHasher = do
   cpuConcurrencyCount <- getNumProcessors
   setNumCapabilities cpuConcurrencyCount
 
-  cpuQueue <- newRunnerQueue cpuConcurrencyCount
-  diskQueue <- newRunnerQueue diskConcurrencyCount
+  cpuQueue <- newJobRunner cpuConcurrencyCount
+  diskQueue <- newJobRunner diskConcurrencyCount
   
   return $ hashFile (cpuQueue, diskQueue)
-
