@@ -18,4 +18,4 @@ main = do
   fileQueue <- readFileList paths
   hasher <- makeHasher
   resultQueue <- pipeline fileQueue hasher
-  processQueue resultQueue printHashResult
+  processResultQueue resultQueue printHash

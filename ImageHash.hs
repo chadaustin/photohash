@@ -7,11 +7,11 @@ module ImageHash
        , readFileList
        , pipeline
        , processQueue
-       , printHashResult
+       , processResultQueue
+       , printHash
        ) where
 
 import Control.Concurrent
-import Control.Concurrent.Async (Async, async, wait)
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TMQueue
 import Control.Monad
@@ -27,6 +27,8 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as BS
 import qualified System.Directory.PathWalk as PathWalk
 
+import Pipeline
+
 -- Generic TMQueue utilities
 
 processQueue :: TMQueue a -> (a -> IO ()) -> IO ()
@@ -37,6 +39,16 @@ processQueue queue action = do
     Just entry -> do
       action entry
       processQueue queue action
+
+processResultQueue :: TMQueue (MVar a) -> (a -> IO ()) -> IO ()
+processResultQueue queue action = do
+  atomically (readTMQueue queue) >>= \case
+    Nothing ->
+      return ()
+    Just entry -> do
+      entry' <- takeMVar entry
+      action entry'
+      processResultQueue queue action
 
 pipeline :: TMQueue a -> (a -> IO b) -> IO (TMQueue b)
 pipeline input transform = do
@@ -57,19 +69,10 @@ pipeline input transform = do
 
 type Hash = BS.ByteString
 data HashResult = HashResult FilePath Hash
-data JobRunner = JobRunner !(TMQueue (IO ())) ![Async ()]
 type HashFunction = FilePath -> IO (MVar HashResult)
 
-runOnQueue :: JobRunner -> IO a -> IO (MVar a)
-runOnQueue (JobRunner queue _) action = do
-  result <- newEmptyMVar
-  atomically $ writeTMQueue queue $ do
-    r <- action
-    putMVar result r
-  return result
-
 sha1Hash :: JobRunner -> HashFunction
-sha1Hash diskQueue path = runOnQueue diskQueue $ do
+sha1Hash diskQueue path = queueJob diskQueue $ do
   contents <- BS.readFile path
   return $ HashResult path $ B16.encode $ SHA1.hash contents
 
@@ -107,7 +110,7 @@ djpegOptions = ["-dct", "int", "-dither", "none", "-nosmooth"]
 
 imageHash :: JobRunner -> HashFunction
 imageHash queue path = do
-  outputMVars <- mapM (runOnQueue queue . hashPipe) [
+  outputMVars <- mapM (queueJob queue . hashPipe) [
      [ ["djpeg"] ++ djpegOptions ++ ["-bmp", path] ],
      [ ["jpegtran", "-rotate", "90", path],
        ["djpeg"] ++ djpegOptions ++ ["-bmp"] ],
@@ -148,30 +151,10 @@ readFileList paths = do
     atomically $ closeTMQueue fileQueue
   return fileQueue
 
-printHashResult :: MVar HashResult -> IO ()
-printHashResult result = do
-  (HashResult path hash) <- takeMVar result
+printHash :: HashResult -> IO ()
+printHash (HashResult path hash) = do
   putStrLn $ (unpack hash) ++ " *" ++ path
-
-
-
-newJobRunner :: Int -> IO JobRunner
-newJobRunner concurrency = do
-  queue <- newTMQueueIO
-  runners <- replicateM concurrency $ do
-    async $ forever $ do
-      let loop = do
-            (atomically $ readTMQueue queue) >>= \case
-              Just action -> action >> loop
-              Nothing -> return ()
-      loop
-  return $ JobRunner queue runners
-
-stopJobRunner :: JobRunner -> IO ()
-stopJobRunner (JobRunner queue runners) = do
-  atomically $ closeTMQueue queue
-  forM_ runners wait
-
+  
 type Hasher = FilePath -> IO (MVar HashResult)
 
 makeHasher :: IO Hasher
