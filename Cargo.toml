@@ -10,6 +10,8 @@ edition = "2018"
 walkdir = "2"
 tokio = { version = "0.2", features = ["full"] }
 crossbeam = ""
+crossbeam-channel = ""
 rayon = ""
 futures = ""
-
+anyhow = ""
+sha-1 = ""
