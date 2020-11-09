@@ -9,12 +9,12 @@ use futures::channel::oneshot::channel;
 use hex::ToHex;
 use sha1::{Digest, Sha1};
 use std::cmp::min;
+use std::ffi::OsStr;
 use std::fmt;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::ffi::OsStr;
 
 const BUFFER_SIZE: usize = 65536;
 
@@ -43,9 +43,7 @@ impl fmt::Display for CommandError {
     }
 }
 
-impl std::error::Error for CommandError {
-
-}
+impl std::error::Error for CommandError {}
 
 fn hash_djpeg<T: Into<Stdio>>(stdin: T) -> Result<Hash> {
     let output = Command::new("djpeg")
@@ -83,24 +81,30 @@ fn hash_jpegtran<T: Into<Stdio>>(stdin: T, args: &[&str]) -> Result<Hash> {
 
 fn imagehash(path: &PathBuf) -> Result<Hash> {
     let ((h1, h2), (h3, h4)) = rayon::join(
-        || rayon::join(
-            || -> Result<Hash> {
-                let file = File::open(path)?;
-                hash_djpeg(file)
-            },
-            || -> Result<Hash> {
-                let file = File::open(path)?;
-                hash_jpegtran(file, &["-rotate", "90"])
-            }),
-        || rayon::join(
-            || -> Result<Hash> {
-                let file = File::open(path)?;
-                hash_jpegtran(file, &["-rotate", "180"])
-            },
-            || -> Result<Hash> {
-                let file = File::open(path)?;
-                hash_jpegtran(file, &["-rotate", "270"])
-            }),
+        || {
+            rayon::join(
+                || -> Result<Hash> {
+                    let file = File::open(path)?;
+                    hash_djpeg(file)
+                },
+                || -> Result<Hash> {
+                    let file = File::open(path)?;
+                    hash_jpegtran(file, &["-rotate", "90"])
+                },
+            )
+        },
+        || {
+            rayon::join(
+                || -> Result<Hash> {
+                    let file = File::open(path)?;
+                    hash_jpegtran(file, &["-rotate", "180"])
+                },
+                || -> Result<Hash> {
+                    let file = File::open(path)?;
+                    hash_jpegtran(file, &["-rotate", "270"])
+                },
+            )
+        },
     );
     Ok(min(min(h1?, h2?), min(h3?, h4?)))
 }
@@ -150,15 +154,22 @@ async fn main() -> Result<()> {
             outputs_sender.send(output_receiver).unwrap();
             pool.spawn_fifo(move || {
                 let hash = hasher(&path);
-                output_sender.send((path, hash)).unwrap();
+                output_sender.send((path, hash)).unwrap_or(())
             });
         }
     });
 
+    let mut stdout = std::io::stdout();
+
     for output in outputs_receiver {
         let (path, hash) = output.await?;
         match hash {
-            Ok(hash) => println!("{} {}", hash.encode_hex::<String>(), path.display()),
+            Ok(hash) => write!(
+                &mut stdout,
+                "{} {}\n",
+                hash.encode_hex::<String>(),
+                path.display()
+            )?,
             Err(e) => eprintln!("hashing {} failed: {}", path.display(), e),
         }
     }
