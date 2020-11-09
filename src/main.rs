@@ -65,6 +65,7 @@ fn hash_jpegtran<T: Into<Stdio>>(stdin: T, args: &[&str]) -> Result<Hash> {
     let mut child = Command::new("jpegtran")
         .args(args)
         .stdin(stdin)
+        .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
 
@@ -115,10 +116,15 @@ enum PoolType {
 }
 
 fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash>) {
-    match path.extension().and_then(&OsStr::to_str) {
-        Some(".jpg") => (PoolType::Cpu, imagehash),
-        Some(".jpeg") => (PoolType::Cpu, imagehash),
-        _ => (PoolType::Io, sha1),
+    let ext = path
+        .extension()
+        .and_then(&OsStr::to_str)
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or("".into());
+    if ext == "jpeg" || ext == "jpg" {
+        (PoolType::Cpu, imagehash)
+    } else {
+        (PoolType::Io, sha1)
     }
 }
 
@@ -166,7 +172,7 @@ async fn main() -> Result<()> {
         match hash {
             Ok(hash) => write!(
                 &mut stdout,
-                "{} {}\n",
+                "{} *{}\n",
                 hash.encode_hex::<String>(),
                 path.display()
             )?,
