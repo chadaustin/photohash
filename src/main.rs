@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use structopt::{StructOpt};
 
 const BUFFER_SIZE: usize = 65536;
 
@@ -129,68 +130,114 @@ fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash>) {
     }
 }
 
-fn get_path() -> Result<PathBuf> {
-    match home::home_dir() {
-        Some(path) => Ok(path),
-        None => Err(anyhow!("Failed to get home directory")),
-    }
+fn get_database_path() -> Result<PathBuf> {
+    let dirs = match directories::BaseDirs::new() {
+        Some(dirs) => dirs,
+        None => {
+            return Err(anyhow!("Failed to find local config directory"));
+        }
+    };
+    let mut path = PathBuf::from(dirs.config_dir());
+    path.push(".imagehash.sqlite");
+    eprintln!("the path is {}", path.display());
+    Ok(path)
 }
 
 fn open_database() -> Result<Connection> {
-    Ok(Connection::open(get_path()?)?)
+    let conn = Connection::open(get_database_path()?)?;
+
+    conn.execute("
+        CREATE TABLE IF NOT EXISTS files (
+            path TEXT,
+            inode INT,
+            size INT,
+            mtime INT
+        )
+    ")?;
+
+    Ok(conn)
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "index", about = "Scan directories and update the index")]
+struct Index {
+
+}
+
+impl Index {
+    async fn run(&self) -> Result<()> {
+        open_database()?;
+
+        let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
+        let cpu_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(num_cpus::get())
+            .build()?;
+    
+        let (paths_sender, paths_receiver) = unbounded();
+    
+        rayon::spawn(move || {
+            for entry in WalkDir::new(".") {
+                if let Ok(e) = entry {
+                    if e.file_type().is_file() {
+                        paths_sender.send(e.into_path()).unwrap();
+                    }
+                }
+            }
+        });
+    
+        let (outputs_sender, outputs_receiver) = unbounded();
+    
+        rayon::spawn(move || {
+            for path in paths_receiver {
+                let (output_sender, output_receiver) = channel();
+                let (pool_type, hasher) = get_hasher(&path);
+                let pool = match pool_type {
+                    PoolType::Cpu => &cpu_pool,
+                    PoolType::Io => &io_pool,
+                };
+                outputs_sender.send(output_receiver).unwrap();
+                pool.spawn_fifo(move || {
+                    let hash = hasher(&path);
+                    output_sender.send((path, hash)).unwrap_or(())
+                });
+            }
+        });
+    
+        let mut stdout = std::io::stdout();
+    
+        for output in outputs_receiver {
+            let (path, hash) = output.await?;
+            match hash {
+                Ok(hash) => write!(
+                    &mut stdout,
+                    "{} *{}\n",
+                    hash.encode_hex::<String>(),
+                    path.display()
+                )?,
+                Err(e) => eprintln!("hashing {} failed: {}", path.display(), e),
+            }
+        }
+    
+        Ok(())    
+    }
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "imagehash", about = "Index your files")]
+enum Opt {
+    Index(Index)
+}
+
+impl Opt {
+    async fn run(&self) -> Result<()> {
+        match self {
+            Opt::Index(index) => index.run().await
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
-    let cpu_pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .build()?;
-
-    let (paths_sender, paths_receiver) = unbounded();
-
-    rayon::spawn(move || {
-        for entry in WalkDir::new(".") {
-            if let Ok(e) = entry {
-                if e.file_type().is_file() {
-                    paths_sender.send(e.into_path()).unwrap();
-                }
-            }
-        }
-    });
-
-    let (outputs_sender, outputs_receiver) = unbounded();
-
-    rayon::spawn(move || {
-        for path in paths_receiver {
-            let (output_sender, output_receiver) = channel();
-            let (pool_type, hasher) = get_hasher(&path);
-            let pool = match pool_type {
-                PoolType::Cpu => &cpu_pool,
-                PoolType::Io => &io_pool,
-            };
-            outputs_sender.send(output_receiver).unwrap();
-            pool.spawn_fifo(move || {
-                let hash = hasher(&path);
-                output_sender.send((path, hash)).unwrap_or(())
-            });
-        }
-    });
-
-    let mut stdout = std::io::stdout();
-
-    for output in outputs_receiver {
-        let (path, hash) = output.await?;
-        match hash {
-            Ok(hash) => write!(
-                &mut stdout,
-                "{} *{}\n",
-                hash.encode_hex::<String>(),
-                path.display()
-            )?,
-            Err(e) => eprintln!("hashing {} failed: {}", path.display(), e),
-        }
-    }
-
-    Ok(())
+    let opt = Opt::from_args();
+    opt.run().await
 }
