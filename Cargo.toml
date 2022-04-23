@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 walkdir = "2"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 crossbeam = "*"
 crossbeam-channel = "*"
 rayon = "*"
