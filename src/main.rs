@@ -4,10 +4,11 @@ use walkdir::WalkDir;
 //use rayon::prelude::*;
 use crossbeam_channel::unbounded;
 //use std::thread;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use futures::channel::oneshot::channel;
 use hex::ToHex;
 use sha1::{Digest, Sha1};
+use sqlite::Connection;
 use std::cmp::min;
 use std::ffi::OsStr;
 use std::fmt;
@@ -126,6 +127,17 @@ fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash>) {
     } else {
         (PoolType::Io, sha1)
     }
+}
+
+fn get_path() -> Result<PathBuf> {
+    match home::home_dir() {
+        Some(path) => Ok(path),
+        None => Err(anyhow!("Failed to get home directory")),
+    }
+}
+
+fn open_database() -> Result<Connection> {
+    Ok(Connection::open(get_path()?)?)
 }
 
 #[tokio::main]
