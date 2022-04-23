@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use structopt::{StructOpt};
+use structopt::StructOpt;
 
 const BUFFER_SIZE: usize = 65536;
 
@@ -146,35 +146,45 @@ fn get_database_path() -> Result<PathBuf> {
 fn open_database() -> Result<Connection> {
     let conn = Connection::open(get_database_path()?)?;
 
-    conn.execute("
+    conn.execute(
+        "
         CREATE TABLE IF NOT EXISTS files (
             path TEXT,
             inode INT,
             size INT,
             mtime INT
         )
-    ")?;
+    ",
+    )?;
 
     Ok(conn)
 }
 
+struct Indexer {
+    connection: Connection,
+}
+
+impl Indexer {
+    fn new() -> Result<Indexer> {
+        let conn = open_database()?;
+
+        Ok(Indexer { connection: conn })
+    }
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "index", about = "Scan directories and update the index")]
-struct Index {
-
-}
+struct Index {}
 
 impl Index {
     async fn run(&self) -> Result<()> {
-        open_database()?;
+        let indexer = Indexer::new()?;
 
         let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
         let cpu_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(num_cpus::get())
             .build()?;
-    
         let (paths_sender, paths_receiver) = unbounded();
-    
         rayon::spawn(move || {
             for entry in WalkDir::new(".") {
                 if let Ok(e) = entry {
@@ -184,9 +194,7 @@ impl Index {
                 }
             }
         });
-    
         let (outputs_sender, outputs_receiver) = unbounded();
-    
         rayon::spawn(move || {
             for path in paths_receiver {
                 let (output_sender, output_receiver) = channel();
@@ -202,9 +210,7 @@ impl Index {
                 });
             }
         });
-    
         let mut stdout = std::io::stdout();
-    
         for output in outputs_receiver {
             let (path, hash) = output.await?;
             match hash {
@@ -217,21 +223,21 @@ impl Index {
                 Err(e) => eprintln!("hashing {} failed: {}", path.display(), e),
             }
         }
-    
-        Ok(())    
+
+        Ok(())
     }
 }
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "imagehash", about = "Index your files")]
 enum Opt {
-    Index(Index)
+    Index(Index),
 }
 
 impl Opt {
     async fn run(&self) -> Result<()> {
         match self {
-            Opt::Index(index) => index.run().await
+            Opt::Index(index) => index.run().await,
         }
     }
 }
