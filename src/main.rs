@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use crossbeam_channel::unbounded;
 use futures::channel::oneshot::channel;
 use hex::ToHex;
+use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
 use sha1::{Digest, Sha1};
 use sqlite::Connection;
 use std::cmp::min;
@@ -12,7 +13,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use structopt::StructOpt;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use walkdir::WalkDir;
 
 #[cfg(windows)]
@@ -49,6 +50,46 @@ fn blake3(path: &PathBuf) -> Result<Hash32> {
         hasher.update(&buffer[..n]);
     }
     Ok(hasher.finalize().into())
+}
+
+fn perceptual_hash(path: &PathBuf) -> Result<()> {
+    let mut file = File::open(path)?;
+    let size = file.metadata()?.file_size();
+    let reader = libheif_rs::StreamReader::new(file, size);
+
+    let ctx = HeifContext::read_from_reader(Box::new(reader))?;
+    let handle = ctx.primary_image_handle()?;
+    eprintln!("width and height: {} x {}", handle.width(), handle.height());
+
+    // Get Exif
+    let mut meta_ids: Vec<ItemId> = vec![0; 1];
+    let count = handle.metadata_block_ids("Exif", &mut meta_ids);
+    assert_eq!(count, 1);
+    let exif: Vec<u8> = handle.metadata(meta_ids[0])?;
+
+    eprintln!("exif done");
+
+    // Decode the image
+    // TODO: ignore_transformations = true, then rotate four
+    let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), true)?;
+    assert_eq!(image.color_space(), Some(ColorSpace::Rgb(RgbChroma::Rgb)));
+    //assert_eq!(image.width(Channel::Interleaved)?, 3024);
+    //assert_eq!(image.height(Channel::Interleaved)?, 4032);
+
+    eprintln!("decode done");
+
+    let planes = image.planes();
+    let interleaved_plane = planes.interleaved.unwrap();
+    assert!(!interleaved_plane.data.is_empty());
+    assert!(interleaved_plane.stride > 0);
+
+    // perceptual hash
+
+    //blockhash::blockhash256(&interleaved_plane);
+
+    eprintln!("pixels done");
+
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -154,7 +195,7 @@ fn get_database_path() -> Result<PathBuf> {
     };
     let mut path = PathBuf::from(dirs.config_dir());
     path.push(".imagehash.sqlite");
-    eprintln!("the path is {}", path.display());
+    //eprintln!("the path is {}", path.display());
     Ok(path)
 }
 
@@ -274,6 +315,18 @@ impl Index {
                     }
                 };
 
+                let perceptual_hash = match perceptual_hash(&path) {
+                    Ok(h) => h,
+                    Err(err) => {
+                        eprintln!(
+                            "failed to read perceptual hash of {}: {}",
+                            path.display(),
+                            err
+                        );
+                        continue;
+                    }
+                };
+
                 println!(
                     "got = {}, size = {}, blake3 = {}",
                     path.display(),
@@ -350,6 +403,8 @@ impl Opt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    std::fs::File::create("\\\\?\\C:\\Users\\Chad\\aux.txt")?;
+
     let opt = Opt::from_args();
     opt.run().await
 }
