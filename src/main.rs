@@ -1,3 +1,7 @@
+// TODO: fix
+#![allow(dead_code)]
+#![allow(unused)]
+
 use anyhow::{anyhow, Result};
 use crossbeam_channel::unbounded;
 use futures::channel::oneshot::channel;
@@ -12,10 +16,13 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::time::SystemTime;
 use structopt::StructOpt;
 use tokio::sync::{mpsc, oneshot};
 use walkdir::WalkDir;
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
@@ -52,9 +59,30 @@ fn blake3(path: &PathBuf) -> Result<Hash32> {
     Ok(hasher.finalize().into())
 }
 
-fn perceptual_hash(path: &PathBuf) -> Result<()> {
-    let mut file = File::open(path)?;
-    let size = file.metadata()?.file_size();
+struct HeifPerceptualImage<'a> {
+    plane: &'a libheif_rs::Plane<&'a [u8]>,
+}
+
+impl blockhash::Image for HeifPerceptualImage<'_> {
+    type Pixel = blockhash::Rgb<u8>;
+
+    fn dimensions(&self) -> (u32, u32) {
+        (self.plane.width, self.plane.height)
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+        let offset = self.plane.stride * y as usize + 3 * x as usize;
+        let data = &self.plane.data;
+        if offset + 2 >= data.len() {
+            eprintln!("out of bound access x={}, y={}", x, y);
+        }
+        return blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]]);
+    }
+}
+
+fn perceptual_hash(path: &PathBuf) -> Result<[u8; 32]> {
+    let file = File::open(path)?;
+    let size = file.metadata()?.len();
     let reader = libheif_rs::StreamReader::new(file, size);
 
     let ctx = HeifContext::read_from_reader(Box::new(reader))?;
@@ -63,7 +91,7 @@ fn perceptual_hash(path: &PathBuf) -> Result<()> {
 
     // Get Exif
     let mut meta_ids: Vec<ItemId> = vec![0; 1];
-    let count = handle.metadata_block_ids("Exif", &mut meta_ids);
+    let count = handle.metadata_block_ids(&mut meta_ids, b"Exif");
     assert_eq!(count, 1);
     let exif: Vec<u8> = handle.metadata(meta_ids[0])?;
 
@@ -71,7 +99,7 @@ fn perceptual_hash(path: &PathBuf) -> Result<()> {
 
     // Decode the image
     // TODO: ignore_transformations = true, then rotate four
-    let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), true)?;
+    let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), None)?;
     assert_eq!(image.color_space(), Some(ColorSpace::Rgb(RgbChroma::Rgb)));
     //assert_eq!(image.width(Channel::Interleaved)?, 3024);
     //assert_eq!(image.height(Channel::Interleaved)?, 4032);
@@ -83,13 +111,19 @@ fn perceptual_hash(path: &PathBuf) -> Result<()> {
     assert!(!interleaved_plane.data.is_empty());
     assert!(interleaved_plane.stride > 0);
 
-    // perceptual hash
-
-    //blockhash::blockhash256(&interleaved_plane);
+    eprintln!("plane.stride = {}", interleaved_plane.stride);
 
     eprintln!("pixels done");
 
-    Ok(())
+    // perceptual hash
+
+    let phash = blockhash::blockhash256(&HeifPerceptualImage {
+        plane: &interleaved_plane,
+    });
+
+    eprintln!("perceptual hash done");
+
+    Ok(phash.into())
 }
 
 #[derive(Debug, Clone)]
@@ -235,17 +269,16 @@ struct FileMetadata {
     inode: u64,
     size: u64,
     /// mtime in the local platform's units
-    mtime: u64,
+    mtime: SystemTime,
 }
 
 impl FileMetadata {
-    #[cfg(windows)]
-    fn fromDirEntry(entry: &walkdir::DirEntry) -> Result<FileMetadata> {
+    fn from_dir_entry(entry: &walkdir::DirEntry) -> Result<FileMetadata> {
         let metadata = entry.metadata()?;
         Ok(FileMetadata {
-            inode: 0,
-            size: metadata.file_size(),
-            mtime: metadata.last_write_time(),
+            inode: if cfg!(unix) { metadata.ino() } else { 0 },
+            size: metadata.len(),
+            mtime: metadata.modified()?,
         })
     }
 }
@@ -286,7 +319,7 @@ impl Index {
                         // 1. We just read the directory, so maybe stat() is hot
                         // 2. Windows may provide some or all of this information
                         //    from the FindNextFile call.
-                        let metadata = FileMetadata::fromDirEntry(&e);
+                        let metadata = FileMetadata::from_dir_entry(&e);
 
                         if let Err(_) = path_tx.send((e.into_path(), metadata)).await {
                             eprintln!("receiver dropped");
@@ -328,10 +361,11 @@ impl Index {
                 };
 
                 println!(
-                    "got = {}, size = {}, blake3 = {}",
+                    "got = {}, size = {}, blake3 = {}, phash = {}",
                     path.display(),
                     metadata.size,
                     b3.encode_hex::<String>(),
+                    hex::encode(&perceptual_hash),
                 );
             }
         });
@@ -403,8 +437,6 @@ impl Opt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    std::fs::File::create("\\\\?\\C:\\Users\\Chad\\aux.txt")?;
-
     let opt = Opt::from_args();
     opt.run().await
 }

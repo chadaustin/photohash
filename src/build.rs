@@ -1,3 +1,5 @@
 fn main() {
-    vcpkg::find_package("libheif").unwrap();
+    if cfg!(windows) {
+        vcpkg::find_package("libheif").unwrap();
+    }
 }
