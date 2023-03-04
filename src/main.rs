@@ -19,6 +19,7 @@ use std::process::{Command, Stdio};
 use std::time::SystemTime;
 use structopt::StructOpt;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use walkdir::WalkDir;
 
 #[cfg(unix)]
@@ -89,6 +90,9 @@ struct ImageMetadata {
 fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     let file = File::open(path)?;
     let size = file.metadata()?.len();
+    // libheif_rs does not allow customizing its multithreading behavior, and
+    // allocates new threads per decoded image.
+    // TODO: replace with libheif_sys and call heif_context_set_max_decoding_threads(0).
     let reader = libheif_rs::StreamReader::new(file, size);
 
     let ctx = HeifContext::read_from_reader(Box::new(reader))?;
@@ -382,42 +386,44 @@ impl Index {
                     }
                 };
 
-                let b3 = match blake3(&path) {
-                    Ok(b3) => b3,
-                    Err(err) => {
-                        eprintln!("failed to read blake3 of {}: {}", path.display(), err);
-                        continue;
-                    }
-                };
+                let blake_path = path.clone();
+                let blake3_future: JoinHandle<Result<Hash32>> =
+                    tokio::spawn(async move { blake3(&blake_path) });
 
-                let image_metadata = match perceptual_hash(&path) {
-                    Ok(h) => h,
-                    Err(err) => {
-                        eprintln!(
-                            "failed to read perceptual hash of {}: {}",
-                            path.display(),
-                            err
-                        );
-                        continue;
-                    }
-                };
+                let image_metadata_path = path.clone();
+                let image_metadata_future: JoinHandle<Result<ImageMetadata>> =
+                    tokio::spawn(async move { perceptual_hash(&image_metadata_path) });
 
-                let content_metadata = ContentMetadata {
-                    path: path,
-                    size: metadata.size,
-                    mtime: metadata.mtime,
-                    blake3: b3,
-                    image_metadata: image_metadata,
-                };
+                let content_metadata_future: JoinHandle<Result<ContentMetadata>> =
+                    tokio::spawn(async move {
+                        let b3 = blake3_future.await??;
+                        let image_metadata = image_metadata_future.await??;
 
-                if let Err(_) = metadata_tx.send(content_metadata).await {
+                        Ok(ContentMetadata {
+                            path: path,
+                            size: metadata.size,
+                            mtime: metadata.mtime,
+                            blake3: b3,
+                            image_metadata: image_metadata,
+                        })
+                    });
+
+                if let Err(_) = metadata_tx.send(content_metadata_future).await {
                     eprintln!("receiver dropped");
                     return;
                 }
             }
         });
 
-        while let Some(content_metadata) = metadata_rx.recv().await {
+        while let Some(content_metadata_future) = metadata_rx.recv().await {
+            let content_metadata = content_metadata_future.await?;
+            let content_metadata = match content_metadata {
+                Ok(content_metadata) => content_metadata,
+                Err(e) => {
+                    eprintln!("failed to read the thing {}", e);
+                    continue;
+                }
+            };
             println!(
                 "{}: size = {}, blake3 = {}, blockhash = {}",
                 content_metadata.path.display(),
@@ -426,7 +432,6 @@ impl Index {
                 hex::encode(&content_metadata.image_metadata.blockhash),
             );
         }
-
 
         /*
                 let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
