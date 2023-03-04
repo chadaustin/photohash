@@ -282,11 +282,23 @@ struct FileMetadata {
     mtime: SystemTime,
 }
 
+#[cfg(not(unix))]
+trait FakeInode {
+    fn ino(&self) -> u64;
+}
+
+#[cfg(not(unix))]
+impl FakeInode for std::fs::Metadata {
+    fn ino(&self) -> u64 {
+        0
+    }
+}
+
 impl FileMetadata {
     fn from_dir_entry(entry: &walkdir::DirEntry) -> Result<FileMetadata> {
         let metadata = entry.metadata()?;
         Ok(FileMetadata {
-            inode: if cfg!(unix) { metadata.ino() } else { 0 },
+            inode: metadata.ino(),
             size: metadata.len(),
             mtime: metadata.modified()?,
         })
