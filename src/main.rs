@@ -80,14 +80,20 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-fn perceptual_hash(path: &PathBuf) -> Result<[u8; 32]> {
+struct ImageMetadata {
+    image_width: u32,
+    image_height: u32,
+    blockhash: Hash32,
+}
+
+fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     let file = File::open(path)?;
     let size = file.metadata()?.len();
     let reader = libheif_rs::StreamReader::new(file, size);
 
     let ctx = HeifContext::read_from_reader(Box::new(reader))?;
     let handle = ctx.primary_image_handle()?;
-    eprintln!("width and height: {} x {}", handle.width(), handle.height());
+    //eprintln!("width and height: {} x {}", handle.width(), handle.height());
 
     // Get Exif
     let mut meta_ids: Vec<ItemId> = vec![0; 1];
@@ -95,7 +101,7 @@ fn perceptual_hash(path: &PathBuf) -> Result<[u8; 32]> {
     assert_eq!(count, 1);
     let exif: Vec<u8> = handle.metadata(meta_ids[0])?;
 
-    eprintln!("exif done");
+    //eprintln!("exif done");
 
     // Decode the image
     // TODO: ignore_transformations = true, then rotate four
@@ -104,16 +110,16 @@ fn perceptual_hash(path: &PathBuf) -> Result<[u8; 32]> {
     //assert_eq!(image.width(Channel::Interleaved)?, 3024);
     //assert_eq!(image.height(Channel::Interleaved)?, 4032);
 
-    eprintln!("decode done");
+    //eprintln!("decode done");
 
     let planes = image.planes();
     let interleaved_plane = planes.interleaved.unwrap();
     assert!(!interleaved_plane.data.is_empty());
     assert!(interleaved_plane.stride > 0);
 
-    eprintln!("plane.stride = {}", interleaved_plane.stride);
+    //eprintln!("plane.stride = {}", interleaved_plane.stride);
 
-    eprintln!("pixels done");
+    //eprintln!("pixels done");
 
     // perceptual hash
 
@@ -121,9 +127,13 @@ fn perceptual_hash(path: &PathBuf) -> Result<[u8; 32]> {
         plane: &interleaved_plane,
     });
 
-    eprintln!("perceptual hash done");
+    //eprintln!("perceptual hash done");
 
-    Ok(phash.into())
+    Ok(ImageMetadata {
+        image_width: handle.width(),
+        image_height: handle.height(),
+        blockhash: phash.into(),
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -291,12 +301,26 @@ struct Index {
 }
 
 const PATH_CHANNEL_SIZE: usize = 1000;
+const RESULT_CHANNEL_SIZE: usize = 1000;
+
+struct ContentMetadata {
+    path: PathBuf,
+
+    // File attributes
+    size: u64,
+    mtime: SystemTime,
+
+    // Content attributes
+    // MD5? SHA-1?
+    blake3: Hash32,
+
+    image_metadata: ImageMetadata,
+}
 
 impl Index {
     async fn run(&self) -> Result<()> {
         let indexer = Indexer::new()?;
 
-        let (path_tx, mut path_rx) = mpsc::channel(PATH_CHANNEL_SIZE);
         let dirs = if self.dirs.is_empty() {
             vec![".".into()]
         } else {
@@ -307,6 +331,9 @@ impl Index {
             .map(|path| path.canonicalize())
             .collect::<Result<_, _>>()?;
 
+        let (path_tx, mut path_rx) = mpsc::channel(PATH_CHANNEL_SIZE);
+
+        // Crawler task pushes work into path_tx.
         tokio::spawn(async move {
             for dir in dirs {
                 for entry in WalkDir::new(dir) {
@@ -330,7 +357,10 @@ impl Index {
             }
         });
 
-        let handle = tokio::spawn(async move {
+        let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
+
+        // Reads enumerated paths and computes necessary file metadata and content hashes.
+        tokio::spawn(async move {
             while let Some((path, metadata)) = path_rx.recv().await {
                 let metadata = match metadata {
                     Ok(metadata) => metadata,
@@ -348,7 +378,7 @@ impl Index {
                     }
                 };
 
-                let perceptual_hash = match perceptual_hash(&path) {
+                let image_metadata = match perceptual_hash(&path) {
                     Ok(h) => h,
                     Err(err) => {
                         eprintln!(
@@ -360,17 +390,31 @@ impl Index {
                     }
                 };
 
-                println!(
-                    "got = {}, size = {}, blake3 = {}, phash = {}",
-                    path.display(),
-                    metadata.size,
-                    b3.encode_hex::<String>(),
-                    hex::encode(&perceptual_hash),
-                );
+                let content_metadata = ContentMetadata {
+                    path: path,
+                    size: metadata.size,
+                    mtime: metadata.mtime,
+                    blake3: b3,
+                    image_metadata: image_metadata,
+                };
+
+                if let Err(_) = metadata_tx.send(content_metadata).await {
+                    eprintln!("receiver dropped");
+                    return;
+                }
             }
         });
 
-        handle.await?;
+        while let Some(content_metadata) = metadata_rx.recv().await {
+            println!(
+                "{}: size = {}, blake3 = {}, blockhash = {}",
+                content_metadata.path.display(),
+                content_metadata.size,
+                content_metadata.blake3.encode_hex::<String>(),
+                hex::encode(&content_metadata.image_metadata.blockhash),
+            );
+        }
+
 
         /*
                 let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
