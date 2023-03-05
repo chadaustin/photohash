@@ -8,7 +8,6 @@ use futures::channel::oneshot::channel;
 use hex::ToHex;
 use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
 use sha1::{Digest, Sha1};
-use sqlite::Connection;
 use std::cmp::min;
 use std::ffi::OsStr;
 use std::fmt;
@@ -22,15 +21,19 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use walkdir::WalkDir;
 
+mod database;
+mod model;
+
+use database::Database;
+use model::{Hash20, Hash32};
+use model::{ContentMetadata, ImageMetadata, FileInfo};
+
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
 const BUFFER_SIZE: usize = 65536;
-
-type Hash20 = [u8; 20];
-type Hash32 = [u8; 32];
 
 fn sha1(path: &PathBuf) -> Result<Hash20> {
     let mut hasher = Sha1::new();
@@ -81,11 +84,6 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-struct ImageMetadata {
-    image_width: u32,
-    image_height: u32,
-    blockhash: Hash32,
-}
 
 fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     let file = File::open(path)?;
@@ -234,58 +232,6 @@ fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash20>) {
     }
 }
 
-fn get_database_path() -> Result<PathBuf> {
-    let dirs = match directories::BaseDirs::new() {
-        Some(dirs) => dirs,
-        None => {
-            return Err(anyhow!("Failed to find local config directory"));
-        }
-    };
-    let mut path = PathBuf::from(dirs.config_dir());
-    path.push(".imagehash.sqlite");
-    //eprintln!("the path is {}", path.display());
-    Ok(path)
-}
-
-fn open_database() -> Result<Connection> {
-    let conn = Connection::open(get_database_path()?)?;
-
-    conn.execute(
-        "
-        CREATE TABLE IF NOT EXISTS files (
-            path TEXT,
-            inode INT,
-            size INT,
-            mtime INT,
-            blake3 BLOB
-        )
-    ",
-    )?;
-
-    Ok(conn)
-}
-
-struct Indexer {
-    connection: Connection,
-}
-
-impl Indexer {
-    fn new() -> Result<Indexer> {
-        let conn = open_database()?;
-
-        Ok(Indexer { connection: conn })
-    }
-}
-
-/// Platform-independent subset of file information to be stored in SQLite.
-struct FileMetadata {
-    /// 0 on Windows for now. May contain file_index() when the API is stabilized.
-    inode: u64,
-    size: u64,
-    /// mtime in the local platform's units
-    mtime: SystemTime,
-}
-
 #[cfg(not(unix))]
 trait FakeInode {
     fn ino(&self) -> u64;
@@ -298,10 +244,10 @@ impl FakeInode for std::fs::Metadata {
     }
 }
 
-impl FileMetadata {
-    fn from_dir_entry(entry: &walkdir::DirEntry) -> Result<FileMetadata> {
+impl FileInfo {
+    fn from_dir_entry(entry: &walkdir::DirEntry) -> Result<FileInfo> {
         let metadata = entry.metadata()?;
-        Ok(FileMetadata {
+        Ok(FileInfo {
             inode: metadata.ino(),
             size: metadata.len(),
             mtime: metadata.modified()?,
@@ -319,23 +265,9 @@ struct Index {
 const PATH_CHANNEL_SIZE: usize = 1000;
 const RESULT_CHANNEL_SIZE: usize = 1000;
 
-struct ContentMetadata {
-    path: PathBuf,
-
-    // File attributes
-    size: u64,
-    mtime: SystemTime,
-
-    // Content attributes
-    // MD5? SHA-1?
-    blake3: Hash32,
-
-    image_metadata: ImageMetadata,
-}
-
 impl Index {
     async fn run(&self) -> Result<()> {
-        let indexer = Indexer::new()?;
+        let db = Database::open()?;
 
         let dirs = if self.dirs.is_empty() {
             vec![".".into()]
@@ -362,7 +294,7 @@ impl Index {
                         // 1. We just read the directory, so maybe stat() is hot
                         // 2. Windows may provide some or all of this information
                         //    from the FindNextFile call.
-                        let metadata = FileMetadata::from_dir_entry(&e);
+                        let metadata = FileInfo::from_dir_entry(&e);
 
                         if let Err(_) = path_tx.send((e.into_path(), metadata)).await {
                             eprintln!("receiver dropped");
@@ -400,11 +332,10 @@ impl Index {
                         let image_metadata = image_metadata_future.await??;
 
                         Ok(ContentMetadata {
-                            path: path,
-                            size: metadata.size,
-                            mtime: metadata.mtime,
+                            path,
+                            file_info: metadata,
                             blake3: b3,
-                            image_metadata: image_metadata,
+                            image_metadata,
                         })
                     });
 
@@ -427,7 +358,7 @@ impl Index {
             println!(
                 "{}: size = {}, blake3 = {}, blockhash = {}",
                 content_metadata.path.display(),
-                content_metadata.size,
+                content_metadata.file_info.size,
                 content_metadata.blake3.encode_hex::<String>(),
                 hex::encode(&content_metadata.image_metadata.blockhash),
             );
