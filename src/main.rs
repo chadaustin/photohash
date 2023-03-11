@@ -30,6 +30,8 @@ use model::{Hash20, Hash32};
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
@@ -415,29 +417,51 @@ impl Index {
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "path", about = "Print database location")]
-struct DbPath {
-}
-
+struct DbPath {}
 
 impl DbPath {
     async fn run(&self) -> Result<()> {
-        println!("{}\n", database::get_database_path()?.display());
+        println!("{}", database::get_database_path()?.display());
         Ok(())
     }
 }
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "open", about = "Interactively explore database")]
+struct DbOpen {}
+
+impl DbOpen {
+    async fn run(&self) -> Result<()> {
+        let mut cmd = Command::new("sqlite3");
+        cmd.arg(database::get_database_path()?);
+
+        if cfg!(unix) {
+            Err(cmd.exec().into())
+        } else {
+            let status = cmd.status()?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(anyhow!("Failed to run sqlite3 command"))
+            }
+        }
+    }
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "db", about = "Database administration")]
 enum Db {
     #[structopt(name = "path")]
     DbPath(DbPath),
+    #[structopt(name = "open")]
+    DbOpen(DbOpen),
 }
 
 impl Db {
     async fn run(&self) -> Result<()> {
         match self {
             Db::DbPath(cmd) => cmd.run().await,
+            Db::DbOpen(cmd) => cmd.run().await,
         }
     }
 }
