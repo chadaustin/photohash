@@ -21,8 +21,6 @@ pub struct ContentMetadata {
     // Content attributes
     // MD5? SHA-1?
     pub blake3: Hash32,
-
-    pub image_metadata: ImageMetadata,
 }
 
 pub struct ImageMetadata {

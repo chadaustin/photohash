@@ -25,8 +25,8 @@ mod database;
 mod model;
 
 use database::Database;
+use model::{ContentMetadata, FileInfo, ImageMetadata};
 use model::{Hash20, Hash32};
-use model::{ContentMetadata, ImageMetadata, FileInfo};
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
@@ -83,7 +83,6 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
         return blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]]);
     }
 }
-
 
 fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     let file = File::open(path)?;
@@ -326,17 +325,19 @@ impl Index {
                 let image_metadata_future: JoinHandle<Result<ImageMetadata>> =
                     tokio::spawn(async move { perceptual_hash(&image_metadata_path) });
 
-                let content_metadata_future: JoinHandle<Result<ContentMetadata>> =
+                let content_metadata_future: JoinHandle<Result<(ContentMetadata, ImageMetadata)>> =
                     tokio::spawn(async move {
                         let b3 = blake3_future.await??;
                         let image_metadata = image_metadata_future.await??;
 
-                        Ok(ContentMetadata {
-                            path,
-                            file_info: metadata,
-                            blake3: b3,
+                        Ok((
+                            ContentMetadata {
+                                path,
+                                file_info: metadata,
+                                blake3: b3,
+                            },
                             image_metadata,
-                        })
+                        ))
                     });
 
                 if let Err(_) = metadata_tx.send(content_metadata_future).await {
@@ -347,8 +348,7 @@ impl Index {
         });
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
-            let content_metadata = content_metadata_future.await?;
-            let content_metadata = match content_metadata {
+            let (content_metadata, image_metadata) = match content_metadata_future.await? {
                 Ok(content_metadata) => content_metadata,
                 Err(e) => {
                     eprintln!("failed to read the thing {}", e);
@@ -360,7 +360,7 @@ impl Index {
                 content_metadata.path.display(),
                 content_metadata.file_info.size,
                 content_metadata.blake3.encode_hex::<String>(),
-                hex::encode(&content_metadata.image_metadata.blockhash),
+                hex::encode(&image_metadata.blockhash),
             );
         }
 
@@ -414,15 +414,46 @@ impl Index {
 }
 
 #[derive(Debug, StructOpt)]
+#[structopt(name = "path", about = "Print database location")]
+struct DbPath {
+}
+
+
+impl DbPath {
+    async fn run(&self) -> Result<()> {
+        println!("{}\n", database::get_database_path()?.display());
+        Ok(())
+    }
+}
+
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "db", about = "Database administration")]
+enum Db {
+    #[structopt(name = "path")]
+    DbPath(DbPath),
+}
+
+impl Db {
+    async fn run(&self) -> Result<()> {
+        match self {
+            Db::DbPath(cmd) => cmd.run().await,
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
 #[structopt(name = "imagehash", about = "Index your files")]
 enum Opt {
     Index(Index),
+    Db(Db),
 }
 
 impl Opt {
     async fn run(&self) -> Result<()> {
         match self {
-            Opt::Index(index) => index.run().await,
+            Opt::Index(cmd) => cmd.run().await,
+            Opt::Db(cmd) => cmd.run().await,
         }
     }
 }

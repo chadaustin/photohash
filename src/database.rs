@@ -1,6 +1,9 @@
-use anyhow::{anyhow, Result};
-use sqlite::Connection;
+use anyhow::{anyhow, Context, Result};
+use rusqlite::Connection;
 use std::path::PathBuf;
+use std::time::SystemTime;
+
+use super::model;
 
 pub struct Database {
     conn: Connection,
@@ -10,11 +13,12 @@ impl Database {
     pub fn open() -> Result<Self> {
         let database_path = get_database_path()?;
 
-        eprintln!("opening database at {}\n", database_path.display());
+        //eprintln!("opening database at {}\n", database_path.display());
         if let Some(parent) = database_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let conn = Connection::open(database_path)?;
+        let conn = Connection::open(&database_path)
+            .with_context(|| format!("failed to open database at {}\n", database_path.display()))?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS files (
@@ -24,6 +28,7 @@ impl Database {
                 mtime INT,
                 blake3 BLOB
             )",
+            (),
         )?;
 
         conn.execute(
@@ -33,25 +38,46 @@ impl Database {
                 height INT,
                 blockhash256 BLOB
             )",
+            (),
         )?;
 
         Ok(Database { conn })
     }
 
-/*
-    pub fn add_files(&self, files: &[model::FileInfo]) -> Result<()> {
-        let query = "INSERT INTO files VALUES (:path, :inode, :size, :mtime, :blake3)";
-        let mut stmt = self.conn.prepare(query)?;
-        statement.bind_iter::<_, (_, Value)>([
-            (":path", "Bob".into()),
-            (":inode", 42.into()),
-            (":size", )
-        ])?;
+    pub fn add_files(&self, files: &[model::ContentMetadata]) -> Result<()> {
+        let mut query = self.conn.prepare(
+            "INSERT INTO files (path, inode, size, mtime, blake3) VALUES (?, ?, ?, ?, ?)",
+        )?;
+        for file in files {
+            query.execute((
+                // TODO: store paths as UTF-8
+                &file.path.to_string_lossy(),
+                &file.file_info.inode,
+                &file.file_info.size,
+                // TODO: store mtime as i64 since epoch -- negative is okay
+                file.file_info
+                    .mtime
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos() as i64,
+                &file.blake3,
+            ))?;
+        }
+        Ok(())
     }
-*/
+
+    /*
+        pub fn add_files(&self, files: &[model::FileInfo]) -> Result<()> {
+            statement.bind_iter::<_, (_, Value)>([
+                (":path", "Bob".into()),
+                (":inode", 42.into()),
+                (":size", )
+            ])?;
+        }
+    */
 }
 
-fn get_database_path() -> Result<PathBuf> {
+pub fn get_database_path() -> Result<PathBuf> {
     let dirs = match directories::BaseDirs::new() {
         Some(dirs) => dirs,
         None => {
