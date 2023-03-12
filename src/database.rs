@@ -1,52 +1,67 @@
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 use std::time::SystemTime;
 
-use super::model;
+use crate::ContentMetadata;
+use crate::FileInfo;
 
 pub struct Database {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl Database {
     pub fn open() -> Result<Self> {
         let database_path = get_database_path()?;
 
-        //eprintln!("opening database at {}\n", database_path.display());
+        //eprintln!("opening database at {}", database_path.display());
         if let Some(parent) = database_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(&database_path)
-            .with_context(|| format!("failed to open database at {}\n", database_path.display()))?;
+            .with_context(|| format!("failed to open database at {}", database_path.display()))?;
+
+        // TODO: on newer SQLite, use STRICT
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS files (
-                path TEXT,
-                inode INT,
-                size INT,
-                mtime INT,
-                blake3 BLOB
-            )",
+                path TEXT PRIMARY KEY,
+                inode INT NOT NULL,
+                size INT NOT NULL,
+                mtime INT NOT NULL,
+                blake3 BLOB NOT NULL
+            ) WITHOUT ROWID",
             (),
-        )?;
+        )
+        .context("failed to create `files` table")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS images (
-                blake3 BLOB,
-                width INT,
-                height INT,
-                blockhash256 BLOB
-            )",
+                blake3 BLOB PRIMARY KEY,
+                width INT NOT NULL,
+                height INT NOT NULL,
+                blockhash256 BLOB NOT NULL
+            ) WITHOUT ROWID",
             (),
-        )?;
+        )
+        .context("failed to create `images` table")?;
 
-        Ok(Database { conn })
+        Ok(Database {
+            conn: Mutex::new(conn),
+        })
     }
 
-    pub fn add_files(&self, files: &[model::ContentMetadata]) -> Result<()> {
-        let mut query = self.conn.prepare(
-            "INSERT INTO files (path, inode, size, mtime, blake3) VALUES (?, ?, ?, ?, ?)",
+    pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let mut query = conn.prepare(
+            "INSERT OR REPLACE INTO files
+            (path, inode, size, mtime, blake3)
+            VALUES (?, ?, ?, ?, ?)",
         )?;
         for file in files {
             query.execute((
@@ -64,6 +79,25 @@ impl Database {
             ))?;
         }
         Ok(())
+    }
+
+    pub fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<Option<ContentMetadata>> {
+        let conn = self.conn.lock().unwrap();
+        let mut query =
+            conn.prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")?;
+        Ok(query
+            .query_row((&path.as_ref().to_string_lossy(),), |row| {
+                Ok(ContentMetadata {
+                    path: path.as_ref().to_path_buf(),
+                    file_info: FileInfo {
+                        inode: row.get(0)?,
+                        size: row.get(1)?,
+                        mtime: SystemTime::UNIX_EPOCH + Duration::from_nanos(row.get(2)?),
+                    },
+                    blake3: row.get(3)?,
+                })
+            })
+            .optional()?)
     }
 
     /*

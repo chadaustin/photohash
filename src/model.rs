@@ -5,6 +5,7 @@ pub type Hash20 = [u8; 20];
 pub type Hash32 = [u8; 32];
 
 /// Platform-independent subset of file information to be stored in SQLite.
+#[derive(PartialEq)]
 pub struct FileInfo {
     /// 0 on Windows for now. May contain file_index() when the API is stabilized.
     pub inode: u64,

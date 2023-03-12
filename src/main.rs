@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::unbounded;
 use futures::channel::oneshot::channel;
 use hex::ToHex;
@@ -15,6 +15,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::time::SystemTime;
 use structopt::StructOpt;
 use tokio::sync::{mpsc, oneshot};
@@ -268,16 +269,20 @@ const RESULT_CHANNEL_SIZE: usize = 1000;
 
 impl Index {
     async fn run(&self) -> Result<()> {
-        let db = Database::open()?;
+        let db = Arc::new(Database::open()?);
 
         let dirs = if self.dirs.is_empty() {
             vec![".".into()]
         } else {
             self.dirs.clone()
         };
+
         let dirs: Vec<PathBuf> = dirs
             .iter()
-            .map(|path| path.canonicalize())
+            .map(|path| {
+                path.canonicalize()
+                    .with_context(|| format!("failed to canonicalize {}", path.display()))
+            })
             .collect::<Result<_, _>>()?;
 
         let (path_tx, mut path_rx) = mpsc::channel(PATH_CHANNEL_SIZE);
@@ -309,8 +314,17 @@ impl Index {
         let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
 
         // Reads enumerated paths and computes necessary file metadata and content hashes.
+        let db2 = db.clone();
         tokio::spawn(async move {
             while let Some((path, metadata)) = path_rx.recv().await {
+                let record = match db2.get_file(&path) {
+                    Ok(record) => record,
+                    Err(err) => {
+                        eprintln!("failed to read record for {}, {}", path.display(), err);
+                        continue;
+                    }
+                };
+
                 let metadata = match metadata {
                     Ok(metadata) => metadata,
                     Err(err) => {
@@ -318,6 +332,19 @@ impl Index {
                         continue;
                     }
                 };
+
+                match record {
+                    Some(ref record) => {
+                        eprintln!("got a record for {}", path.display());
+                    }
+                    None => {
+                        eprintln!("didn't get a record for {}", path.display())
+                    }
+                }
+
+                if Some(&metadata) == record.as_ref().map(|x| &x.file_info) {
+                    eprintln!("same");
+                }
 
                 let blake_path = path.clone();
                 let blake3_future: JoinHandle<Result<Hash32>> =
@@ -364,6 +391,7 @@ impl Index {
                 content_metadata.blake3.encode_hex::<String>(),
                 hex::encode(&image_metadata.blockhash),
             );
+            db.add_files(&[&content_metadata])?;
         }
 
         /*
