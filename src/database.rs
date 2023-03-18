@@ -10,6 +10,8 @@ use std::time::SystemTime;
 
 use crate::ContentMetadata;
 use crate::FileInfo;
+use crate::Hash32;
+use crate::ImageMetadata;
 
 pub struct Database {
     conn: Mutex<Connection>,
@@ -100,15 +102,40 @@ impl Database {
             .optional()?)
     }
 
-    /*
-        pub fn add_files(&self, files: &[model::FileInfo]) -> Result<()> {
-            statement.bind_iter::<_, (_, Value)>([
-                (":path", "Bob".into()),
-                (":inode", 42.into()),
-                (":size", )
-            ])?;
-        }
-    */
+    pub fn add_image_metadata(
+        &self,
+        blake3: &Hash32,
+        image_metadata: &ImageMetadata,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let mut query = conn.prepare(
+            "INSERT OR REPLACE INTO images
+            (blake3, width, height, blockhash256)
+            VALUES (?, ?, ?, ?)",
+        )?;
+        query.execute((
+            &blake3,
+            &image_metadata.image_width,
+            &image_metadata.image_height,
+            &image_metadata.blockhash256,
+        ))?;
+        Ok(())
+    }
+
+    pub fn get_image_metadata(&self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
+        let conn = self.conn.lock().unwrap();
+        let mut query =
+            conn.prepare("SELECT width, height, blockhash256 FROM images WHERE blake3 = ?")?;
+        Ok(query
+            .query_row((&blake3,), |row| {
+                Ok(ImageMetadata {
+                    image_width: row.get(0)?,
+                    image_height: row.get(1)?,
+                    blockhash256: row.get(2)?,
+                })
+            })
+            .optional()?)
+    }
 }
 
 pub fn get_database_path() -> Result<PathBuf> {

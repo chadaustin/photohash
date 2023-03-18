@@ -38,6 +38,9 @@ use std::os::windows::fs::MetadataExt;
 
 const BUFFER_SIZE: usize = 65536;
 
+const PATH_CHANNEL_SIZE: usize = 8;
+const RESULT_CHANNEL_SIZE: usize = 8;
+
 fn sha1(path: &PathBuf) -> Result<Hash20> {
     let mut hasher = Sha1::new();
     let mut file = File::open(path)?;
@@ -52,7 +55,7 @@ fn sha1(path: &PathBuf) -> Result<Hash20> {
     Ok(hasher.finalize().into())
 }
 
-fn blake3(path: &PathBuf) -> Result<Hash32> {
+fn compute_blake3(path: &PathBuf) -> Result<Hash32> {
     let mut hasher = blake3::Hasher::new();
     let mut file = File::open(path)?;
     let mut buffer = [0u8; BUFFER_SIZE];
@@ -136,7 +139,7 @@ fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     Ok(ImageMetadata {
         image_width: handle.width(),
         image_height: handle.height(),
-        blockhash: phash.into(),
+        blockhash256: phash.into(),
     })
 }
 
@@ -264,8 +267,50 @@ struct Index {
     dirs: Vec<PathBuf>,
 }
 
-const PATH_CHANNEL_SIZE: usize = 1000;
-const RESULT_CHANNEL_SIZE: usize = 1000;
+struct ProcessResult {
+    content_metadata: ContentMetadata,
+    image_metadata: ImageMetadata,
+    // todo: information about whether either should be written to the database
+}
+
+async fn process_file(
+    db: Arc<Database>,
+    path: PathBuf,
+    file_info: FileInfo,
+    db_metadata: Option<ContentMetadata>,
+) -> Result<(ContentMetadata, ImageMetadata)> {
+    let b3 = match db_metadata {
+        Some(ref record) => {
+            // If metadata matches our records, we can assume blake3 hasn't changed.
+            if file_info == record.file_info {
+                record.blake3
+            } else {
+                compute_blake3(&path)?
+            }
+        }
+        None => {
+            // No record of this file - blake3 must be computed.
+            eprintln!("computing blake3 of {}", path.display());
+            compute_blake3(&path)?
+        }
+    };
+
+    // TODO: is this an image?
+
+    let image_metadata = match db.get_image_metadata(&b3)? {
+        Some(im) => im,
+        None => perceptual_hash(&path)?,
+    };
+
+    Ok((
+        ContentMetadata {
+            path,
+            file_info,
+            blake3: b3,
+        },
+        image_metadata,
+    ))
+}
 
 impl Index {
     async fn run(&self) -> Result<()> {
@@ -317,14 +362,6 @@ impl Index {
         let db2 = db.clone();
         tokio::spawn(async move {
             while let Some((path, metadata)) = path_rx.recv().await {
-                let record = match db2.get_file(&path) {
-                    Ok(record) => record,
-                    Err(err) => {
-                        eprintln!("failed to read record for {}, {}", path.display(), err);
-                        continue;
-                    }
-                };
-
                 let metadata = match metadata {
                     Ok(metadata) => metadata,
                     Err(err) => {
@@ -333,52 +370,32 @@ impl Index {
                     }
                 };
 
-                match record {
-                    Some(ref record) => {
-                        eprintln!("got a record for {}", path.display());
+                // Check the database to see if there's anything to recompute.
+                let db_metadata = match db.get_file(&path) {
+                    Ok(record) => record,
+                    Err(err) => {
+                        eprintln!("failed to read record for {}, {}", path.display(), err);
+                        continue;
                     }
-                    None => {
-                        eprintln!("didn't get a record for {}", path.display())
-                    }
-                }
+                };
 
-                if Some(&metadata) == record.as_ref().map(|x| &x.file_info) {
-                    eprintln!("same");
-                }
+                let metadata_future = tokio::spawn({
+                    let db = db.clone();
+                    async move { process_file(db, path, metadata, db_metadata).await }
+                });
 
-                let blake_path = path.clone();
-                let blake3_future: JoinHandle<Result<Hash32>> =
-                    tokio::spawn(async move { blake3(&blake_path) });
-
-                let image_metadata_path = path.clone();
-                let image_metadata_future: JoinHandle<Result<ImageMetadata>> =
-                    tokio::spawn(async move { perceptual_hash(&image_metadata_path) });
-
-                let content_metadata_future: JoinHandle<Result<(ContentMetadata, ImageMetadata)>> =
-                    tokio::spawn(async move {
-                        let b3 = blake3_future.await??;
-                        let image_metadata = image_metadata_future.await??;
-
-                        Ok((
-                            ContentMetadata {
-                                path,
-                                file_info: metadata,
-                                blake3: b3,
-                            },
-                            image_metadata,
-                        ))
-                    });
-
-                if let Err(_) = metadata_tx.send(content_metadata_future).await {
+                if let Err(_) = metadata_tx.send(metadata_future).await {
                     eprintln!("receiver dropped");
                     return;
                 }
             }
         });
 
+        let db = db2;
         while let Some(content_metadata_future) = metadata_rx.recv().await {
-            let (content_metadata, image_metadata) = match content_metadata_future.await? {
-                Ok(content_metadata) => content_metadata,
+            let content_metadata_future = content_metadata_future.await?;
+            let (content_metadata, image_metadata) = match content_metadata_future {
+                Ok(r) => r,
                 Err(e) => {
                     eprintln!("failed to read the thing {}", e);
                     continue;
@@ -389,16 +406,13 @@ impl Index {
                 content_metadata.path.display(),
                 content_metadata.file_info.size,
                 content_metadata.blake3.encode_hex::<String>(),
-                hex::encode(&image_metadata.blockhash),
+                hex::encode(&image_metadata.blockhash256),
             );
             db.add_files(&[&content_metadata])?;
+            db.add_image_metadata(&content_metadata.blake3, &image_metadata)?;
         }
 
         /*
-                let io_pool = rayon::ThreadPoolBuilder::new().num_threads(4).build()?;
-                let cpu_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get())
-                    .build()?;
                 let (paths_sender, paths_receiver) = unbounded();
                 rayon::spawn(move || {
                     for entry in WalkDir::new(".") {

@@ -27,5 +27,5 @@ pub struct ContentMetadata {
 pub struct ImageMetadata {
     pub image_width: u32,
     pub image_height: u32,
-    pub blockhash: Hash32,
+    pub blockhash256: Hash32,
 }
