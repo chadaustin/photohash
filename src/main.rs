@@ -480,7 +480,7 @@ impl DbOpen {
     }
 
     #[cfg(unix)]
-    fn exec(cmd: Command) -> Result<()> {
+    fn exec(mut cmd: Command) -> Result<()> {
         Err(cmd.exec().into())
     }
 
