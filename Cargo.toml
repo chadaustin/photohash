@@ -21,11 +21,16 @@ anyhow = "*"
 sha-1 = "*"
 num_cpus = "*"
 hex = "*"
-rusqlite = "*"
 structopt = "*"
 blake3 = "*"
 directories = "*"
 
-libheif-rs = "*"
+libheif-rs = "0.18"
 blockhash = "*"
 img_hash = "*"
+
+[target.'cfg(windows)'.dependencies]
+rusqlite = { version = "*", features = ["bundled"] }
+
+[target.'cfg(not(windows))'.dependencies]
+rusqlite = "*"
