@@ -91,6 +91,8 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
 }
 
 fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
+    let libheif = libheif_rs::LibHeif::new();
+
     let file = File::open(path)?;
     let size = file.metadata()?.len();
     // libheif_rs does not allow customizing its multithreading behavior, and
@@ -112,7 +114,7 @@ fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
 
     // Decode the image
     // TODO: ignore_transformations = true, then rotate four
-    let image = handle.decode(ColorSpace::Rgb(RgbChroma::Rgb), None)?;
+    let image = libheif.decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)?;
     assert_eq!(image.color_space(), Some(ColorSpace::Rgb(RgbChroma::Rgb)));
     //assert_eq!(image.width(Channel::Interleaved)?, 3024);
     //assert_eq!(image.height(Channel::Interleaved)?, 4032);

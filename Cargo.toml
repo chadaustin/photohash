@@ -25,7 +25,7 @@ structopt = "*"
 blake3 = "*"
 directories = "*"
 
-libheif-rs = "0.18"
+libheif-rs = "*"
 blockhash = "*"
 img_hash = "*"
 
