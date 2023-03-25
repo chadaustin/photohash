@@ -533,6 +533,6 @@ impl Opt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::from_iter(wild::args_os());
     opt.run().await
 }

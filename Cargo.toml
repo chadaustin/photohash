@@ -24,6 +24,7 @@ hex = "*"
 structopt = "*"
 blake3 = "*"
 directories = "*"
+wild = "*"
 
 libheif-rs = "*"
 blockhash = "*"
