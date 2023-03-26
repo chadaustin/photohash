@@ -100,7 +100,8 @@ fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     // TODO: replace with libheif_sys and call heif_context_set_max_decoding_threads(0).
     let reader = libheif_rs::StreamReader::new(file, size);
 
-    let ctx = HeifContext::read_from_reader(Box::new(reader))?;
+    let mut ctx = HeifContext::read_from_reader(Box::new(reader))?;
+    ctx.set_max_decoding_threads(0);
     let handle = ctx.primary_image_handle()?;
     //eprintln!("width and height: {} x {}", handle.width(), handle.height());
 
