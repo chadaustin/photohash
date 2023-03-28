@@ -90,7 +90,11 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-fn perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
+fn jpeg_perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
+    Err(anyhow!("JPEGs not supported"))
+}
+
+fn heic_perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
     let libheif = libheif_rs::LibHeif::new();
 
     let file = File::open(path)?;
@@ -281,7 +285,8 @@ async fn process_file(
     path: PathBuf,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
-) -> Result<(ContentMetadata, ImageMetadata)> {
+) -> Result<(ContentMetadata, Option<ImageMetadata>)> {
+    // TODO: only open the file once, and reuse it for any potential image hashing
     let b3 = match db_metadata {
         Some(ref record) => {
             // If metadata matches our records, we can assume blake3 hasn't changed.
@@ -298,12 +303,22 @@ async fn process_file(
         }
     };
 
-    // TODO: is this an image?
+    let mut image_metadata = None;
 
-    let image_metadata = match db.get_image_metadata(&b3)? {
-        Some(im) => im,
-        None => perceptual_hash(&path)?,
-    };
+    // TODO: is this an image?
+    if let Some(ext) = path.extension() {
+        if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+            image_metadata = Some(match db.get_image_metadata(&b3)? {
+                Some(im) => im,
+                None => jpeg_perceptual_hash(&path)?,
+            });
+        } else if ext.eq_ignore_ascii_case("heic") {
+            image_metadata = Some(match db.get_image_metadata(&b3)? {
+                Some(im) => im,
+                None => heic_perceptual_hash(&path)?,
+            });
+        }
+    }
 
     Ok((
         ContentMetadata {
@@ -409,10 +424,14 @@ impl Index {
                 content_metadata.path.display(),
                 content_metadata.file_info.size,
                 content_metadata.blake3.encode_hex::<String>(),
-                hex::encode(&image_metadata.blockhash256),
+                image_metadata
+                    .as_ref()
+                    .map_or("none".into(), |im| hex::encode(&im.blockhash256)),
             );
             db.add_files(&[&content_metadata])?;
-            db.add_image_metadata(&content_metadata.blake3, &image_metadata)?;
+            if let Some(im) = image_metadata {
+                db.add_image_metadata(&content_metadata.blake3, &im)?;
+            }
         }
 
         /*
