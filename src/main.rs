@@ -20,6 +20,7 @@ use std::time::SystemTime;
 use structopt::StructOpt;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::io::AsyncReadExt;
 use walkdir::WalkDir;
 
 mod database;
@@ -41,12 +42,12 @@ const BUFFER_SIZE: usize = 65536;
 const PATH_CHANNEL_SIZE: usize = 8;
 const RESULT_CHANNEL_SIZE: usize = 8;
 
-fn sha1(path: &PathBuf) -> Result<Hash20> {
+async fn sha1(path: &PathBuf) -> Result<Hash20> {
     let mut hasher = Sha1::new();
-    let mut file = File::open(path)?;
+    let mut file = tokio::fs::File::open(path).await?;
     let mut buffer = [0u8; BUFFER_SIZE];
     loop {
-        let n = file.read(&mut buffer)?;
+        let n = file.read(&mut buffer).await?;
         if n == 0 {
             break;
         }
@@ -55,12 +56,12 @@ fn sha1(path: &PathBuf) -> Result<Hash20> {
     Ok(hasher.finalize().into())
 }
 
-fn compute_blake3(path: &PathBuf) -> Result<Hash32> {
+async fn compute_blake3(path: &PathBuf) -> Result<Hash32> {
     let mut hasher = blake3::Hasher::new();
-    let mut file = File::open(path)?;
+    let mut file = tokio::fs::File::open(path).await?;
     let mut buffer = [0u8; BUFFER_SIZE];
     loop {
-        let n = file.read(&mut buffer)?;
+        let n = file.read(&mut buffer).await?;
         if n == 0 {
             break;
         }
@@ -231,6 +232,7 @@ enum PoolType {
     Io,
 }
 
+/*
 fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash20>) {
     let ext = path
         .extension()
@@ -243,6 +245,7 @@ fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash20>) {
         (PoolType::Io, sha1)
     }
 }
+*/
 
 #[cfg(not(unix))]
 trait FakeInode {
@@ -293,13 +296,13 @@ async fn process_file(
             if file_info == record.file_info {
                 record.blake3
             } else {
-                compute_blake3(&path)?
+                compute_blake3(&path).await?
             }
         }
         None => {
             // No record of this file - blake3 must be computed.
             eprintln!("computing blake3 of {}", path.display());
-            compute_blake3(&path)?
+            compute_blake3(&path).await?
         }
     };
 
