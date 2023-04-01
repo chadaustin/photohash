@@ -12,6 +12,7 @@ vcpkg = "*"
 
 [dependencies]
 walkdir = "2"
+jwalk = "*"
 tokio = { version = "1", features = ["full"] }
 crossbeam = "*"
 crossbeam-channel = "*"

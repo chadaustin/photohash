@@ -16,11 +16,12 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 use structopt::StructOpt;
+use tokio::io::AsyncReadExt;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::io::AsyncReadExt;
 use walkdir::WalkDir;
 
 mod database;
@@ -539,10 +540,73 @@ impl Db {
 }
 
 #[derive(Debug, StructOpt)]
+#[structopt(name = "mode", about = "Which benchmark to run")]
+enum BenchmarkMode {
+    WalkDir,
+    JWalk,
+}
+
+impl std::str::FromStr for BenchmarkMode {
+    type Err = &'static str;
+    fn from_str(day: &str) -> Result<Self, Self::Err> {
+        match day {
+            "walkdir" => Ok(BenchmarkMode::WalkDir),
+            "jwalk" => Ok(BenchmarkMode::JWalk),
+            _ => Err("unknown mode"),
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "benchmark", about = "Benchmark directory scans")]
+struct Benchmark {
+    mode: BenchmarkMode,
+
+    #[structopt(parse(from_os_str))]
+    path: PathBuf,
+}
+
+impl Benchmark {
+    async fn run(&self) -> Result<()> {
+        match self.mode {
+            BenchmarkMode::WalkDir => {
+                let now = Instant::now();
+                for entry in WalkDir::new(&self.path) {
+                    if let Ok(e) = entry {
+                        if !e.file_type().is_file() {
+                            continue;
+                        }
+
+                        _ = e.metadata()?;
+                    }
+                }
+                println!("walkdir: {} ms", now.elapsed().as_millis());
+            }
+            BenchmarkMode::JWalk => {
+                let now = Instant::now();
+                for entry in jwalk::WalkDir::new(&self.path) {
+                    if let Ok(e) = entry {
+                        if !e.file_type().is_file() {
+                            continue;
+                        }
+
+                        _ = e.metadata()?;
+                    }
+                }
+                println!("jwalk: {} ms", now.elapsed().as_millis());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
 #[structopt(name = "imagehash", about = "Index your files")]
 enum Opt {
     Index(Index),
     Db(Db),
+    Benchmark(Benchmark),
 }
 
 impl Opt {
@@ -550,6 +614,7 @@ impl Opt {
         match self {
             Opt::Index(cmd) => cmd.run().await,
             Opt::Db(cmd) => cmd.run().await,
+            Opt::Benchmark(cmd) => cmd.run().await,
         }
     }
 }
