@@ -564,6 +564,9 @@ struct Benchmark {
 
     #[structopt(parse(from_os_str))]
     path: PathBuf,
+
+    #[structopt(long)]
+    stat: bool,
 }
 
 impl Benchmark {
@@ -577,7 +580,9 @@ impl Benchmark {
                             continue;
                         }
 
-                        _ = e.metadata()?;
+                        if self.stat {
+                            _ = e.metadata()?;
+                        }
                     }
                 }
                 println!("walkdir: {} ms", now.elapsed().as_millis());
@@ -590,7 +595,9 @@ impl Benchmark {
                             continue;
                         }
 
-                        _ = e.metadata()?;
+                        if self.stat {
+                            _ = e.metadata()?;
+                        }
                     }
                 }
                 println!("jwalk: {} ms", now.elapsed().as_millis());
