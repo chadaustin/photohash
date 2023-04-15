@@ -26,6 +26,7 @@ use walkdir::WalkDir;
 
 mod database;
 mod model;
+mod cmd;
 
 use database::Database;
 use model::{ContentMetadata, FileInfo, ImageMetadata};
@@ -540,80 +541,11 @@ impl Db {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "mode", about = "Which benchmark to run")]
-enum BenchmarkMode {
-    WalkDir,
-    JWalk,
-}
-
-impl std::str::FromStr for BenchmarkMode {
-    type Err = &'static str;
-    fn from_str(day: &str) -> Result<Self, Self::Err> {
-        match day {
-            "walkdir" => Ok(BenchmarkMode::WalkDir),
-            "jwalk" => Ok(BenchmarkMode::JWalk),
-            _ => Err("unknown mode"),
-        }
-    }
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "benchmark", about = "Benchmark directory scans")]
-struct Benchmark {
-    mode: BenchmarkMode,
-
-    #[structopt(parse(from_os_str))]
-    path: PathBuf,
-
-    #[structopt(long)]
-    stat: bool,
-}
-
-impl Benchmark {
-    async fn run(&self) -> Result<()> {
-        match self.mode {
-            BenchmarkMode::WalkDir => {
-                let now = Instant::now();
-                for entry in WalkDir::new(&self.path) {
-                    if let Ok(e) = entry {
-                        if !e.file_type().is_file() {
-                            continue;
-                        }
-
-                        if self.stat {
-                            _ = e.metadata()?;
-                        }
-                    }
-                }
-                println!("walkdir: {} ms", now.elapsed().as_millis());
-            }
-            BenchmarkMode::JWalk => {
-                let now = Instant::now();
-                for entry in jwalk::WalkDir::new(&self.path) {
-                    if let Ok(e) = entry {
-                        if !e.file_type().is_file() {
-                            continue;
-                        }
-
-                        if self.stat {
-                            _ = e.metadata()?;
-                        }
-                    }
-                }
-                println!("jwalk: {} ms", now.elapsed().as_millis());
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, StructOpt)]
 #[structopt(name = "imagehash", about = "Index your files")]
 enum Opt {
     Index(Index),
     Db(Db),
-    Benchmark(Benchmark),
+    Benchmark(cmd::Benchmark),
 }
 
 impl Opt {
