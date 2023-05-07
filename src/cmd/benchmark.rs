@@ -41,6 +41,8 @@ pub struct Jwalk {
     bypath: bool,
     #[structopt(parse(from_os_str))]
     path: PathBuf,
+    #[structopt(long)]
+    sort: bool,
 }
 
 impl Jwalk {
@@ -49,7 +51,7 @@ impl Jwalk {
         let mut stat_calls = 0;
         for entry in jwalk::WalkDir::new(&self.path)
             .skip_hidden(false)
-            .sort(true)
+            .sort(self.sort)
         {
             if let Ok(e) = entry {
                 if !e.file_type().is_file() {
