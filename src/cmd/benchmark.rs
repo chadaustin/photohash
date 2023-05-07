@@ -47,7 +47,10 @@ impl Jwalk {
     async fn run(&self) -> Result<()> {
         let now = Instant::now();
         let mut stat_calls = 0;
-        for entry in jwalk::WalkDir::new(&self.path).skip_hidden(false).sort(true) {
+        for entry in jwalk::WalkDir::new(&self.path)
+            .skip_hidden(false)
+            .sort(true)
+        {
             if let Ok(e) = entry {
                 if !e.file_type().is_file() {
                     continue;
