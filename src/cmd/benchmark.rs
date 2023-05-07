@@ -37,6 +37,8 @@ impl Walkdir {
 pub struct Jwalk {
     #[structopt(long)]
     stat: bool,
+    #[structopt(long)]
+    bypath: bool,
     #[structopt(parse(from_os_str))]
     path: PathBuf,
 }
@@ -52,7 +54,11 @@ impl Jwalk {
                 }
 
                 if self.stat {
-                    _ = e.metadata()?;
+                    _ = if self.bypath {
+                        std::fs::metadata(e.path())?;
+                    } else {
+                        e.metadata()?;
+                    };
                     stat_calls += 1;
                 }
             }
