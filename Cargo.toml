@@ -11,25 +11,25 @@ build = "src/build.rs"
 vcpkg = "*"
 
 [dependencies]
-walkdir = "2"
-jwalk = "*"
-tokio = { version = "1", features = ["full"] }
+anyhow = "*"
+async-std = { version = "*", features = ["unstable"] }
+blake3 = "*"
+blockhash = "*"
 crossbeam = "*"
 crossbeam-channel = "*"
-rayon = "*"
-futures = "*"
-anyhow = "*"
-sha-1 = "*"
-num_cpus = "*"
-hex = "*"
-structopt = "*"
-blake3 = "*"
 directories = "*"
-wild = "*"
-
-libheif-rs = "*"
-blockhash = "*"
+futures = "*"
+hex = "*"
 img_hash = "*"
+jwalk = "*"
+libheif-rs = "*"
+num_cpus = "*"
+rayon = "*"
+sha-1 = "*"
+structopt = "*"
+tokio = { version = "1", features = ["full"] }
+walkdir = "2"
+wild = "*"
 
 [target.'cfg(windows)'.dependencies]
 rusqlite = { version = "*", features = ["bundled"] }

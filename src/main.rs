@@ -27,6 +27,7 @@ use walkdir::WalkDir;
 mod cmd;
 mod database;
 mod model;
+mod mpmc;
 
 use database::Database;
 use model::{ContentMetadata, FileInfo, ImageMetadata};
