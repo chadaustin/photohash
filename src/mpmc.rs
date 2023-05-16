@@ -43,6 +43,14 @@ impl<'a, T> Future for Send<'a, T> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.sender.state.lock().unwrap();
         state.queue.push_back(self.value.take().unwrap());
+        // TODO: How many do we actually need to wake up?
+        let waker = state.rx_wakers.pop();
+        drop(state);
+
+        if let Some(waker) = waker {
+            waker.wake();
+        }
+
         Poll::Ready(Ok(()))
     }
 }
@@ -123,6 +131,7 @@ pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
 mod tests {
     use crate::mpmc;
     use futures::executor::LocalPool;
+    use futures::task::SpawnExt;
 
     #[test]
     fn send_and_recv() {
@@ -153,5 +162,22 @@ mod tests {
             drop(tx);
             assert_eq!(Some(10), rx.recv().await);
         })
+    }
+
+    #[test]
+    fn recv_wakes_when_sender_sends() {
+        let (tx, rx) = mpmc::unbounded();
+
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+        spawner.spawn(async move {
+            assert_eq!(Some(()), rx.recv().await);
+        });
+
+        spawner.spawn(async move {
+            tx.send(()).await.unwrap();
+        });
+
+        pool.run();
     }
 }
