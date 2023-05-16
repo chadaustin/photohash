@@ -21,7 +21,6 @@ impl<T> Drop for Sender<T> {
         let mut state = self.state.lock().unwrap();
         state.tx_count -= 1;
         if state.tx_count == 0 {
-            state.queue.clear();
             // TODO: wake all the recv waiters
         }
     }
@@ -123,18 +122,36 @@ pub fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
 #[cfg(test)]
 mod tests {
     use crate::mpmc;
+    use futures::executor::LocalPool;
 
-    #[tokio::test]
-    async fn send_and_recv() {
-        let (tx, rx) = mpmc::unbounded();
-        tx.send(10).await.unwrap();
-        assert_eq!(Some(10), rx.recv().await);
+    #[test]
+    fn send_and_recv() {
+        let mut pool = LocalPool::new();
+        pool.run_until(async move {
+            let (tx, rx) = mpmc::unbounded();
+            tx.send(10).await.unwrap();
+            assert_eq!(Some(10), rx.recv().await);
+        })
     }
 
-    #[tokio::test]
-    async fn recv_returns_none_if_sender_dropped() {
-        let (tx, rx) = mpmc::unbounded();
-        drop(tx);
-        assert_eq!(None as Option<()>, rx.recv().await);
+    #[test]
+    fn recv_returns_none_if_sender_dropped() {
+        let mut pool = LocalPool::new();
+        pool.run_until(async move {
+            let (tx, rx) = mpmc::unbounded();
+            drop(tx);
+            assert_eq!(None as Option<()>, rx.recv().await);
+        })
+    }
+
+    #[test]
+    fn recv_returns_value_if_sender_sent_before_dropping() {
+        let mut pool = LocalPool::new();
+        pool.run_until(async move {
+            let (tx, rx) = mpmc::unbounded();
+            tx.send(10).await.unwrap();
+            drop(tx);
+            assert_eq!(Some(10), rx.recv().await);
+        })
     }
 }
