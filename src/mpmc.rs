@@ -22,7 +22,7 @@ impl<T> Drop for Sender<T> {
         assert!(state.tx_count >= 1);
         state.tx_count -= 1;
         if state.tx_count == 0 {
-            for waker in std::mem::replace(&mut state.rx_wakers, Vec::new()) {
+            for waker in std::mem::take(&mut state.rx_wakers) {
                 waker.wake();
             }
         }
