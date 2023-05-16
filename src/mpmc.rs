@@ -110,9 +110,6 @@ pub struct Recv<'a, T> {
 
 impl<'a, T> Unpin for Recv<'a, T> {}
 
-#[derive(Debug)]
-pub struct RecvError();
-
 impl<'a, T> Future for Recv<'a, T> {
     type Output = Option<T>;
 
