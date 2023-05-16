@@ -16,6 +16,15 @@ pub struct Sender<T> {
     state: Arc<Mutex<State<T>>>,
 }
 
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        self.state.lock().unwrap().tx_count += 1;
+        Sender {
+            state: self.state.clone(),
+        }
+    }
+}
+
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         let mut state = self.state.lock().unwrap();
@@ -74,6 +83,15 @@ impl<T> Sender<T> {
 
 pub struct Receiver<T> {
     state: Arc<Mutex<State<T>>>,
+}
+
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        self.state.lock().unwrap().rx_count += 1;
+        Receiver {
+            state: self.state.clone(),
+        }
+    }
 }
 
 impl<T> Drop for Receiver<T> {
@@ -213,6 +231,20 @@ mod tests {
             let (tx, rx) = mpmc::unbounded();
             drop(rx);
             assert_eq!(Err(mpmc::SendError(())), tx.send(()).await);
+        })
+    }
+
+    #[test]
+    fn two_receivers_and_two_senders() {
+        let mut pool = LocalPool::new();
+        pool.run_until(async move {
+            let (tx1, rx1) = mpmc::unbounded();
+            let tx2 = tx1.clone();
+            let rx2 = rx1.clone();
+            tx1.send(1).await;
+            tx2.send(2).await;
+            assert_eq!(Some(1), rx1.recv().await);
+            assert_eq!(Some(2), rx2.recv().await);
         })
     }
 }
