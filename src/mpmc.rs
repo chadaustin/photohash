@@ -21,7 +21,9 @@ impl<T> Drop for Sender<T> {
         let mut state = self.state.lock().unwrap();
         state.tx_count -= 1;
         if state.tx_count == 0 {
-            // TODO: wake all the recv waiters
+            for waker in std::mem::replace(&mut state.rx_wakers, Vec::new()) {
+                waker.wake();
+            }
         }
     }
 }
@@ -176,6 +178,23 @@ mod tests {
 
         spawner.spawn(async move {
             tx.send(()).await.unwrap();
+        });
+
+        pool.run();
+    }
+
+    #[test]
+    fn recv_wakes_when_sender_drops() {
+        let (tx, rx) = mpmc::unbounded();
+
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+        spawner.spawn(async move {
+            assert_eq!(None as Option<()>, rx.recv().await);
+        });
+
+        spawner.spawn(async move {
+            drop(tx);
         });
 
         pool.run();
