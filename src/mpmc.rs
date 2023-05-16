@@ -19,6 +19,7 @@ pub struct Sender<T> {
 impl<T> Drop for Sender<T> {
     fn drop(&mut self) {
         let mut state = self.state.lock().unwrap();
+        assert!(state.tx_count >= 1);
         state.tx_count -= 1;
         if state.tx_count == 0 {
             for waker in std::mem::replace(&mut state.rx_wakers, Vec::new()) {
@@ -36,14 +37,19 @@ pub struct Send<'a, T> {
 
 impl<'a, T> Unpin for Send<'a, T> {}
 
-#[derive(Debug)]
-pub struct SendError();
+#[derive(Debug, PartialEq, Eq)]
+pub struct SendError<T>(T);
 
 impl<'a, T> Future for Send<'a, T> {
-    type Output = Result<(), SendError>;
+    type Output = Result<(), SendError<T>>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.sender.state.lock().unwrap();
+        if state.rx_count == 0 {
+            assert!(state.queue.is_empty());
+            return Poll::Ready(Err(SendError(self.value.take().unwrap())));
+        }
+
         state.queue.push_back(self.value.take().unwrap());
         // TODO: How many do we actually need to wake up?
         let waker = state.rx_wakers.pop();
@@ -70,14 +76,14 @@ pub struct Receiver<T> {
     state: Arc<Mutex<State<T>>>,
 }
 
-/*
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
-        let state = self.q.state.lock();
+        let mut state = self.state.lock().unwrap();
+        assert!(state.rx_count >= 1);
         state.rx_count -= 1;
+        state.queue.clear();
     }
 }
-*/
 
 #[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct Recv<'a, T> {
@@ -198,5 +204,15 @@ mod tests {
         });
 
         pool.run();
+    }
+
+    #[test]
+    fn send_fails_when_receiver_drops() {
+        let mut pool = LocalPool::new();
+        pool.run_until(async move {
+            let (tx, rx) = mpmc::unbounded();
+            drop(rx);
+            assert_eq!(Err(mpmc::SendError(())), tx.send(()).await);
+        })
     }
 }
