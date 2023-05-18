@@ -38,28 +38,18 @@ impl<T> Drop for Sender<T> {
     }
 }
 
-#[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct Send<'a, T> {
-    sender: &'a Sender<T>,
-    value: Option<T>,
-}
-
-impl<'a, T> Unpin for Send<'a, T> {}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct SendError<T>(T);
 
-impl<'a, T> Future for Send<'a, T> {
-    type Output = Result<(), SendError<T>>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = self.sender.state.lock().unwrap();
+impl<T> Sender<T> {
+    pub fn send(&self, value: T) -> Result<(), SendError<T>> {
+        let mut state = self.state.lock().unwrap();
         if state.rx_count == 0 {
             assert!(state.queue.is_empty());
-            return Poll::Ready(Err(SendError(self.value.take().unwrap())));
+            return Err(SendError(value));
         }
 
-        state.queue.push_back(self.value.take().unwrap());
+        state.queue.push_back(value);
         // TODO: How many do we actually need to wake up?
         let waker = state.rx_wakers.pop();
         drop(state);
@@ -68,16 +58,26 @@ impl<'a, T> Future for Send<'a, T> {
             waker.wake();
         }
 
-        Poll::Ready(Ok(()))
+        Ok(())
     }
-}
 
-impl<T> Sender<T> {
-    pub fn send(&self, value: T) -> Send<'_, T> {
-        Send {
-            sender: self,
-            value: Some(value),
+    pub fn send_many<I: IntoIterator<Item = T>>(&self, values: I) -> Result<(), SendError<I>> {
+        let mut state = self.state.lock().unwrap();
+        if state.rx_count == 0 {
+            assert!(state.queue.is_empty());
+            return Err(SendError(values));
         }
+
+        state.queue.extend(values.into_iter());
+        // TODO: How many do we actually need to wake up?
+        let wakers = std::mem::take(&mut state.rx_wakers);
+        drop(state);
+
+        for waker in wakers {
+            waker.wake();
+        }
+
+        Ok(())
     }
 }
 
@@ -99,7 +99,9 @@ impl<T> Drop for Receiver<T> {
         let mut state = self.state.lock().unwrap();
         assert!(state.rx_count >= 1);
         state.rx_count -= 1;
-        state.queue.clear();
+        if state.rx_count == 0 {
+            state.queue.clear();
+        }
     }
 }
 
@@ -110,7 +112,7 @@ pub struct Recv<'a, T> {
 
 impl<'a, T> Unpin for Recv<'a, T> {}
 
-impl<'a, T> Future for Recv<'a, T> {
+impl<'a, T: std::fmt::Debug> Future for Recv<'a, T> {
     type Output = Option<T>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -161,7 +163,7 @@ mod tests {
         let mut pool = LocalPool::new();
         pool.run_until(async move {
             let (tx, rx) = mpmc::unbounded();
-            tx.send(10).await.unwrap();
+            tx.send(10).unwrap();
             assert_eq!(Some(10), rx.recv().await);
         })
     }
@@ -181,7 +183,7 @@ mod tests {
         let mut pool = LocalPool::new();
         pool.run_until(async move {
             let (tx, rx) = mpmc::unbounded();
-            tx.send(10).await.unwrap();
+            tx.send(10).unwrap();
             drop(tx);
             assert_eq!(Some(10), rx.recv().await);
         })
@@ -198,7 +200,7 @@ mod tests {
         });
 
         spawner.spawn(async move {
-            tx.send(()).await.unwrap();
+            tx.send(()).unwrap();
         });
 
         pool.run();
@@ -227,7 +229,7 @@ mod tests {
         pool.run_until(async move {
             let (tx, rx) = mpmc::unbounded();
             drop(rx);
-            assert_eq!(Err(mpmc::SendError(())), tx.send(()).await);
+            assert_eq!(Err(mpmc::SendError(())), tx.send(()));
         })
     }
 
@@ -238,10 +240,50 @@ mod tests {
             let (tx1, rx1) = mpmc::unbounded();
             let tx2 = tx1.clone();
             let rx2 = rx1.clone();
-            tx1.send(1).await;
-            tx2.send(2).await;
+            tx1.send(1).unwrap();
+            tx2.send(2).unwrap();
             assert_eq!(Some(1), rx1.recv().await);
             assert_eq!(Some(2), rx2.recv().await);
         })
+    }
+
+    #[test]
+    fn two_reads_from_one_push() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx1) = mpmc::unbounded();
+        let rx2 = rx1.clone();
+
+        spawner.spawn(async move {
+            assert_eq!(Some(10), rx1.recv().await);
+        });
+        spawner.spawn(async move {
+            assert_eq!(Some(20), rx2.recv().await);
+        });
+        tx.send_many([10, 20]).unwrap();
+
+        pool.run()
+    }
+
+    #[test]
+    fn push_many_wakes_both() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx1) = mpmc::unbounded();
+        let rx2 = rx1.clone();
+
+        spawner.spawn(async move {
+            assert_eq!(Some(10), rx1.recv().await);
+        });
+        spawner.spawn(async move {
+            assert_eq!(Some(20), rx2.recv().await);
+        });
+        spawner.spawn(async move {
+            tx.send_many([10, 20]).unwrap();
+        });
+
+        pool.run()
     }
 }
