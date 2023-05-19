@@ -69,7 +69,7 @@ impl<T> Sender<T> {
         }
 
         state.queue.extend(values.into_iter());
-        // TODO: How many do we actually need to wake up?
+        // TODO: How many do we actually need to wake up? One per added value?
         let wakers = std::mem::take(&mut state.rx_wakers);
         drop(state);
 
@@ -112,7 +112,7 @@ pub struct Recv<'a, T> {
 
 impl<'a, T> Unpin for Recv<'a, T> {}
 
-impl<'a, T: std::fmt::Debug> Future for Recv<'a, T> {
+impl<'a, T> Future for Recv<'a, T> {
     type Output = Option<T>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -131,9 +131,38 @@ impl<'a, T: std::fmt::Debug> Future for Recv<'a, T> {
     }
 }
 
+#[must_use = "futures do nothing unless you .await or poll them"]
+pub struct RecvMany<'a, T> {
+    receiver: &'a Receiver<T>,
+    element_limit: usize,
+}
+
+impl<'a, T> Unpin for RecvMany<'a, T> {}
+
+impl<'a, T> Future for RecvMany<'a, T> {
+    type Output = Vec<T>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut state = self.receiver.state.lock().unwrap();
+        if state.queue.is_empty() {
+            state.rx_wakers.push(cx.waker().clone());
+            Poll::Pending
+        } else if state.queue.len() <= self.element_limit {
+            Poll::Ready(Vec::from(std::mem::take(&mut state.queue)))
+        } else {
+            let tail = state.queue.split_off(self.element_limit);
+            Poll::Ready(Vec::from(std::mem::replace(&mut state.queue, tail)))
+        }
+    }
+}
+
 impl<T> Receiver<T> {
     pub fn recv(&self) -> Recv<'_, T> {
         Recv { receiver: self }
+    }
+
+    pub fn recv_many(&self, element_limit: usize) -> RecvMany<'_, T> {
+        RecvMany { receiver: self, element_limit }
     }
 }
 
@@ -285,5 +314,36 @@ mod tests {
         });
 
         pool.run()
+    }
+
+    #[test]
+    fn recv_many_returning_all() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx) = mpmc::unbounded();
+
+        tx.send_many([10, 20, 30]);
+        spawner.spawn(async move {
+            assert_eq!(vec![10, 20, 30], rx.recv_many(100).await);
+        });
+
+        pool.run();
+    }
+
+    #[test]
+    fn recv_many_returning_some() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx) = mpmc::unbounded();
+
+        tx.send_many([10, 20, 30]);
+        spawner.spawn(async move {
+            assert_eq!(vec![10, 20], rx.recv_many(2).await);
+            assert_eq!(vec![30], rx.recv_many(2).await);
+        });
+
+        pool.run();
     }
 }
