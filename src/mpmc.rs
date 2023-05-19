@@ -61,7 +61,10 @@ impl<T> Sender<T> {
         Ok(())
     }
 
-    pub fn send_many<I: IntoIterator<Item = T>>(&self, values: I) -> Result<(), SendError<I>> {
+    pub fn send_many<I: IntoIterator<Item = T>>(&self, values: I) -> Result<(), SendError<Vec<T>>> {
+        // This iterator might be expensive. Evaluate it before the lock is held.
+        let values: Vec<_> = values.into_iter().collect();
+
         let mut state = self.state.lock().unwrap();
         if state.rx_count == 0 {
             assert!(state.queue.is_empty());
@@ -144,18 +147,19 @@ impl<'a, T> Future for RecvMany<'a, T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.receiver.state.lock().unwrap();
-        if state.queue.is_empty() {
+        let mut q = &mut state.queue;
+        if q.is_empty() {
             if state.tx_count == 0 {
                 Poll::Ready(Vec::new())
             } else {
                 state.rx_wakers.push(cx.waker().clone());
                 Poll::Pending
             }
-        } else if state.queue.len() <= self.element_limit {
-            Poll::Ready(Vec::from(std::mem::take(&mut state.queue)))
+        } else if q.len() <= self.element_limit {
+            Poll::Ready(Vec::from(std::mem::take(q)))
         } else {
-            let tail = state.queue.split_off(self.element_limit);
-            Poll::Ready(Vec::from(std::mem::replace(&mut state.queue, tail)))
+            let drain = q.drain(..self.element_limit);
+            Poll::Ready(drain.collect())
         }
     }
 }
@@ -166,7 +170,10 @@ impl<T> Receiver<T> {
     }
 
     pub fn recv_many(&self, element_limit: usize) -> RecvMany<'_, T> {
-        RecvMany { receiver: self, element_limit }
+        RecvMany {
+            receiver: self,
+            element_limit,
+        }
     }
 }
 

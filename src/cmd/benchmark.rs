@@ -1,8 +1,8 @@
+use crate::mpmc;
 use anyhow::Result;
 use std::path::PathBuf;
 use std::time::Instant;
 use structopt::StructOpt;
-use crate::mpmc;
 
 #[derive(Debug, StructOpt)]
 pub struct Walkdir {
@@ -81,9 +81,9 @@ pub struct JwalkParStat {
     path: PathBuf,
     #[structopt(long)]
     sort: bool,
-    #[structopt(long, default_value="4")]
+    #[structopt(long, default_value = "4")]
     threads: usize,
-    #[structopt(long, default_value="100")]
+    #[structopt(long, default_value = "100")]
     batch: usize,
 }
 
@@ -97,10 +97,7 @@ impl JwalkParStat {
         let path = self.path.clone();
         let sort = self.sort;
         tokio::spawn(async move {
-            for entry in jwalk::WalkDir::new(&path)
-                .skip_hidden(false)
-                .sort(sort)
-            {
+            for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(sort) {
                 let e = match entry {
                     Ok(e) => e,
                     Err(_) => continue,
