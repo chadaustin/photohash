@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::time::Instant;
 use structopt::StructOpt;
+use crate::mpmc;
 
 #[derive(Debug, StructOpt)]
 pub struct Walkdir {
@@ -75,10 +76,80 @@ impl Jwalk {
 }
 
 #[derive(Debug, StructOpt)]
+pub struct JwalkParStat {
+    #[structopt(parse(from_os_str))]
+    path: PathBuf,
+    #[structopt(long)]
+    sort: bool,
+    #[structopt(long, default_value="4")]
+    threads: usize,
+    #[structopt(long, default_value="100")]
+    batch: usize,
+}
+
+impl JwalkParStat {
+    async fn run(&self) -> Result<()> {
+        let now = Instant::now();
+
+        let (path_tx, path_rx) = mpmc::unbounded();
+        let (meta_tx, meta_rx) = mpmc::unbounded();
+
+        let path = self.path.clone();
+        let sort = self.sort;
+        tokio::spawn(async move {
+            for entry in jwalk::WalkDir::new(&path)
+                .skip_hidden(false)
+                .sort(sort)
+            {
+                let e = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                if !e.file_type().is_file() {
+                    continue;
+                }
+                path_tx.send(e.path());
+            }
+        });
+
+        for _ in 0..self.threads {
+            let rx = path_rx.clone();
+            let tx = meta_tx.clone();
+            let batch = self.batch;
+            tokio::spawn(async move {
+                loop {
+                    let paths = rx.recv_many(batch).await;
+                    if paths.is_empty() {
+                        return;
+                    }
+                    tx.send_many(paths.into_iter().map(std::fs::metadata));
+                }
+            });
+        }
+        drop(path_rx);
+        drop(meta_tx);
+
+        let mut stat_calls = 0;
+        loop {
+            let metas = meta_rx.recv_many(self.batch).await;
+            if metas.is_empty() {
+                break;
+            }
+            stat_calls += metas.len();
+        }
+
+        println!("jwalk-par-stat: {} ms", now.elapsed().as_millis());
+        println!("stat calls: {}", stat_calls);
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
 #[structopt(name = "benchmark", about = "Benchmark directory scans")]
 pub enum Benchmark {
     Walkdir(Walkdir),
     Jwalk(Jwalk),
+    JwalkParStat(JwalkParStat),
 }
 
 impl Benchmark {
@@ -86,6 +157,7 @@ impl Benchmark {
         match self {
             Benchmark::Walkdir(cmd) => cmd.run().await,
             Benchmark::Jwalk(cmd) => cmd.run().await,
+            Benchmark::JwalkParStat(cmd) => cmd.run().await,
         }
     }
 }
