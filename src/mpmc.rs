@@ -145,8 +145,12 @@ impl<'a, T> Future for RecvMany<'a, T> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.receiver.state.lock().unwrap();
         if state.queue.is_empty() {
-            state.rx_wakers.push(cx.waker().clone());
-            Poll::Pending
+            if state.tx_count == 0 {
+                Poll::Ready(Vec::new())
+            } else {
+                state.rx_wakers.push(cx.waker().clone());
+                Poll::Pending
+            }
         } else if state.queue.len() <= self.element_limit {
             Poll::Ready(Vec::from(std::mem::take(&mut state.queue)))
         } else {
@@ -342,6 +346,21 @@ mod tests {
         spawner.spawn(async move {
             assert_eq!(vec![10, 20], rx.recv_many(2).await);
             assert_eq!(vec![30], rx.recv_many(2).await);
+        });
+
+        pool.run();
+    }
+
+    #[test]
+    fn recv_many_returns_empty_when_no_tx() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx) = mpmc::unbounded();
+        drop(tx);
+
+        spawner.spawn(async move {
+            assert_eq!(Vec::<()>::new(), rx.recv_many(2).await);
         });
 
         pool.run();
