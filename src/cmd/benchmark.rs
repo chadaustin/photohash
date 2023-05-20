@@ -61,7 +61,7 @@ impl Jwalk {
 
                 if self.stat {
                     _ = if self.bypath {
-                        std::fs::metadata(e.path())?;
+                        std::fs::symlink_metadata(e.path())?;
                     } else {
                         e.metadata()?;
                     };
@@ -129,7 +129,12 @@ impl JwalkParStat {
                     if paths.is_empty() {
                         return;
                     }
-                    tx.send_many(paths.into_iter().map(std::fs::metadata).collect::<Vec<_>>());
+                    tx.send_many(
+                        paths
+                            .into_iter()
+                            .map(std::fs::symlink_metadata)
+                            .collect::<Vec<_>>(),
+                    );
                 }
             });
         }
