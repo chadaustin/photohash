@@ -84,6 +84,8 @@ pub struct JwalkParStat {
     #[structopt(long, default_value = "4")]
     threads: usize,
     #[structopt(long, default_value = "100")]
+    path_batch: usize,
+    #[structopt(long, default_value = "100")]
     batch: usize,
 }
 
@@ -96,7 +98,9 @@ impl JwalkParStat {
 
         let path = self.path.clone();
         let sort = self.sort;
+        let path_batch = self.path_batch;
         tokio::spawn(async move {
+            let mut cb = Vec::with_capacity(path_batch);
             for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(sort) {
                 let e = match entry {
                     Ok(e) => e,
@@ -105,7 +109,13 @@ impl JwalkParStat {
                 if !e.file_type().is_file() {
                     continue;
                 }
-                path_tx.send(e.path());
+                cb.push(e.path());
+                if cb.len() == path_batch {
+                    cb = path_tx.send_many(cb).unwrap();
+                }
+            }
+            if cb.len() > 0 {
+                path_tx.send_many(cb);
             }
         });
 
@@ -119,7 +129,7 @@ impl JwalkParStat {
                     if paths.is_empty() {
                         return;
                     }
-                    tx.send_many(paths.into_iter().map(std::fs::metadata));
+                    tx.send_many(paths.into_iter().map(std::fs::metadata).collect::<Vec<_>>());
                 }
             });
         }

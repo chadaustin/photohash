@@ -61,9 +61,9 @@ impl<T> Sender<T> {
         Ok(())
     }
 
-    pub fn send_many<I: IntoIterator<Item = T>>(&self, values: I) -> Result<(), SendError<Vec<T>>> {
+    pub fn send_many<I: Into<Vec<T>>>(&self, values: I) -> Result<Vec<T>, SendError<Vec<T>>> {
         // This iterator might be expensive. Evaluate it before the lock is held.
-        let values: Vec<_> = values.into_iter().collect();
+        let mut values: Vec<_> = values.into();
 
         let mut state = self.state.lock().unwrap();
         if state.rx_count == 0 {
@@ -71,7 +71,7 @@ impl<T> Sender<T> {
             return Err(SendError(values));
         }
 
-        state.queue.extend(values.into_iter());
+        state.queue.extend(values.drain(..).into_iter());
         // TODO: How many do we actually need to wake up? One per added value?
         let wakers = std::mem::take(&mut state.rx_wakers);
         drop(state);
@@ -80,7 +80,7 @@ impl<T> Sender<T> {
             waker.wake();
         }
 
-        Ok(())
+        Ok(values)
     }
 }
 
