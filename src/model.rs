@@ -32,6 +32,18 @@ impl From<&Metadata> for FileInfo {
     }
 }
 
+#[cfg(not(unix))]
+trait FakeInode {
+    fn ino(&self) -> u64;
+}
+
+#[cfg(not(unix))]
+impl FakeInode for std::fs::Metadata {
+    fn ino(&self) -> u64 {
+        0
+    }
+}
+
 pub struct ContentMetadata {
     pub path: PathBuf,
 

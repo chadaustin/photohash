@@ -243,18 +243,6 @@ fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash20>) {
 }
 */
 
-#[cfg(not(unix))]
-trait FakeInode {
-    fn ino(&self) -> u64;
-}
-
-#[cfg(not(unix))]
-impl FakeInode for std::fs::Metadata {
-    fn ino(&self) -> u64 {
-        0
-    }
-}
-
 struct ProcessResult {
     content_metadata: ContentMetadata,
     image_metadata: ImageMetadata,
