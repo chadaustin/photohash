@@ -110,21 +110,26 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Met
 }
 
 #[cfg(target_os = "linux")]
-fn is_wsl1() -> bool {
-    let check = || -> std::io::Result<bool> {
-        let contents = std::fs::read_to_string("/proc/version_signature")?;
-        Ok(contents.contains("Microsoft"))
-    };
-    check().unwrap_or(false)
+fn prefer_serial_scan() -> bool {
+    match std::fs::read_to_string("/proc/version_signature") {
+        Ok(contents) => contents.contains("Microsoft"),
+        Err(_) => false,
+    }
 }
 
-#[cfg(not(target_os = "linux"))]
-fn is_wsl1() -> bool {
-    false
+#[cfg(windows)]
+fn prefer_serial_scan() -> bool {
+    // On both NTFS and over SMB, walkdir is 4-10x faster.
+    true
+}
+
+#[cfg(all(not(windows), not(target_os = "linux")))]
+fn prefer_serial_scan() -> bool {
+    true
 }
 
 pub fn get_scan() -> fn(Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
-    if is_wsl1() {
+    if prefer_serial_scan() {
         serial_scan
     } else {
         parallel_scan
