@@ -115,7 +115,7 @@ impl JwalkParStat {
                 }
             }
             if cb.len() > 0 {
-                path_tx.send_many(cb);
+                path_tx.send_many(cb).unwrap();
             }
         });
 

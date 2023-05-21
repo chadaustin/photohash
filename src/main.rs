@@ -28,6 +28,7 @@ mod cmd;
 mod database;
 mod model;
 mod mpmc;
+mod scan;
 
 use database::Database;
 use model::{ContentMetadata, FileInfo, ImageMetadata};
