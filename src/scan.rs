@@ -5,29 +5,31 @@ use std::path::{Path, PathBuf};
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-pub fn serial_scan(path: PathBuf) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
         let mut cb = Vec::with_capacity(SERIAL_CHANNEL_BATCH);
 
-        for entry in walkdir::WalkDir::new(path) {
-            let e = match entry {
-                Ok(e) => e,
-                // TODO: propagate error?
-                Err(_) => continue,
-            };
-            if !e.file_type().is_file() {
-                continue;
-            }
+        for path in paths {
+            for entry in walkdir::WalkDir::new(path) {
+                let e = match entry {
+                    Ok(e) => e,
+                    // TODO: propagate error?
+                    Err(_) => continue,
+                };
+                if !e.file_type().is_file() {
+                    continue;
+                }
 
-            // The serial scan primarily exists because WSL1 fast-paths the
-            // readdir, serial stat access pattern. It's significantly faster
-            // than a parallel crawl and random access stat pattern.
-            let metadata = e.metadata().map_err(anyhow::Error::from);
-            cb.push((e.into_path(), metadata));
-            if cb.len() == cb.capacity() {
-                cb = tx.send_many(cb).unwrap();
+                // The serial scan primarily exists because WSL1 fast-paths the
+                // readdir, serial stat access pattern. It's significantly faster
+                // than a parallel crawl and random access stat pattern.
+                let metadata = e.metadata().map_err(anyhow::Error::from);
+                cb.push((e.into_path(), metadata));
+                if cb.len() == cb.capacity() {
+                    cb = tx.send_many(cb).unwrap();
+                }
             }
         }
 
@@ -42,31 +44,35 @@ pub fn serial_scan(path: PathBuf) -> mpmc::Receiver<(PathBuf, Result<Metadata>)>
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-pub fn parallel_scan(path: PathBuf) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
-    rayon::spawn(move || {
-        let mut cb = Vec::with_capacity(PARALLEL_CHANNEL_BATCH);
-        for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(false) {
-            let e = match entry {
-                Ok(e) => e,
-                // TODO: propagate error?
-                Err(_) => continue,
-            };
-            if !e.file_type().is_file() {
-                continue;
-            }
+    for path in paths {
+        let tx = path_tx.clone();
+        rayon::spawn(move || {
+            let mut cb = Vec::with_capacity(PARALLEL_CHANNEL_BATCH);
+            for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(false) {
+                let e = match entry {
+                    Ok(e) => e,
+                    // TODO: propagate error?
+                    Err(_) => continue,
+                };
+                if !e.file_type().is_file() {
+                    continue;
+                }
 
-            cb.push(e.path());
-            if cb.len() == cb.capacity() {
-                cb = path_tx.send_many(cb).unwrap();
+                cb.push(e.path());
+                if cb.len() == cb.capacity() {
+                    cb = tx.send_many(cb).unwrap();
+                }
             }
-        }
-        if cb.len() > 0 {
-            path_tx.send_many(cb).unwrap();
-        }
-    });
+            if cb.len() > 0 {
+                tx.send_many(cb).unwrap();
+            }
+        });
+    }
+    drop(path_tx);
 
     for _ in 0..CONCURRENCY {
         let rx = path_rx.clone();
@@ -111,7 +117,7 @@ fn is_wsl1() -> bool {
     false
 }
 
-pub fn get_scan() -> fn(PathBuf) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn get_scan() -> fn(Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
     if is_wsl1() {
         serial_scan
     } else {

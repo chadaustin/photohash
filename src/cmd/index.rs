@@ -4,12 +4,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tokio::sync::mpsc;
-use walkdir::WalkDir;
 
 use crate::compute_blake3;
 use crate::heic_perceptual_hash;
 use crate::jpeg_perceptual_hash;
 use crate::model::ImageMetadata;
+use crate::scan;
 use crate::ContentMetadata;
 use crate::Database;
 use crate::FileInfo;
@@ -42,38 +42,15 @@ impl Index {
             })
             .collect::<Result<_, _>>()?;
 
-        let (path_tx, mut path_rx) = mpsc::channel(PATH_CHANNEL_SIZE);
-
-        // Crawler task pushes work into path_tx.
-        tokio::spawn(async move {
-            for dir in dirs {
-                for entry in WalkDir::new(dir) {
-                    if let Ok(e) = entry {
-                        if !e.file_type().is_file() {
-                            continue;
-                        }
-
-                        // We could defer the stat() to the pulling thread, but:
-                        // 1. We just read the directory, so maybe stat() is hot
-                        // 2. Windows may provide some or all of this information
-                        //    from the FindNextFile call.
-                        let metadata = FileInfo::from_dir_entry(&e);
-
-                        if let Err(_) = path_tx.send((e.into_path(), metadata)).await {
-                            eprintln!("receiver dropped");
-                            return;
-                        }
-                    }
-                }
-            }
-        });
+        let scanner = scan::get_scan();
+        let path_meta_rx = scanner(dirs);
 
         let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
 
         // Reads enumerated paths and computes necessary file metadata and content hashes.
         let db2 = db.clone();
         tokio::spawn(async move {
-            while let Some((path, metadata)) = path_rx.recv().await {
+            while let Some((path, metadata)) = path_meta_rx.recv().await {
                 let metadata = match metadata {
                     Ok(metadata) => metadata,
                     Err(err) => {
@@ -93,7 +70,7 @@ impl Index {
 
                 let metadata_future = tokio::spawn({
                     let db = db.clone();
-                    async move { process_file(db, path, metadata, db_metadata).await }
+                    async move { process_file(db, path, FileInfo::from(&metadata), db_metadata).await }
                 });
 
                 if let Err(_) = metadata_tx.send(metadata_future).await {

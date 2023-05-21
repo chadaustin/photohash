@@ -1,5 +1,11 @@
+use std::fs::Metadata;
 use std::path::PathBuf;
 use std::time::SystemTime;
+
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 
 pub type Hash20 = [u8; 20];
 pub type Hash32 = [u8; 32];
@@ -12,6 +18,18 @@ pub struct FileInfo {
     pub size: u64,
     /// mtime in the local platform's units
     pub mtime: SystemTime,
+}
+
+impl From<&Metadata> for FileInfo {
+    fn from(metadata: &Metadata) -> FileInfo {
+        FileInfo {
+            inode: metadata.ino(),
+            size: metadata.len(),
+            mtime: metadata
+                .modified()
+                .expect("requires a platform that supports mtime"),
+        }
+    }
 }
 
 pub struct ContentMetadata {

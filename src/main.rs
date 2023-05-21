@@ -22,7 +22,6 @@ use structopt::StructOpt;
 use tokio::io::AsyncReadExt;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use walkdir::WalkDir;
 
 mod cmd;
 mod database;
@@ -35,11 +34,7 @@ use model::{ContentMetadata, FileInfo, ImageMetadata};
 use model::{Hash20, Hash32};
 
 #[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
 use std::os::unix::process::CommandExt;
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt;
 
 const BUFFER_SIZE: usize = 65536;
 
@@ -257,17 +252,6 @@ trait FakeInode {
 impl FakeInode for std::fs::Metadata {
     fn ino(&self) -> u64 {
         0
-    }
-}
-
-impl FileInfo {
-    fn from_dir_entry(entry: &walkdir::DirEntry) -> Result<FileInfo> {
-        let metadata = entry.metadata()?;
-        Ok(FileInfo {
-            inode: metadata.ino(),
-            size: metadata.len(),
-            mtime: metadata.modified()?,
-        })
     }
 }
 
