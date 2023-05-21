@@ -168,13 +168,14 @@ async fn process_file(
         }
         None => {
             // No record of this file - blake3 must be computed.
-            eprintln!("computing blake3 of {}", path.display());
+            //eprintln!("computing blake3 of {}", path.display());
             compute_blake3(&path).await?
         }
     };
 
     let mut image_metadata = None;
 
+/*
     // TODO: is this an image?
     if let Some(ext) = path.extension() {
         if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
@@ -189,6 +190,7 @@ async fn process_file(
             });
         }
     }
+*/
 
     Ok((
         ContentMetadata {

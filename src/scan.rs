@@ -16,7 +16,10 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metad
                 let e = match entry {
                     Ok(e) => e,
                     // TODO: propagate error?
-                    Err(_) => continue,
+                    Err(e) => {
+                        eprintln!("error from walkdir entry: {}", e);
+                        continue;
+                    }
                 };
                 if !e.file_type().is_file() {
                     continue;
@@ -56,7 +59,10 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Met
                 let e = match entry {
                     Ok(e) => e,
                     // TODO: propagate error?
-                    Err(_) => continue,
+                    Err(e) => {
+                        eprintln!("error from jwalk entry: {}", e);
+                        continue;
+                    }
                 };
                 if !e.file_type().is_file() {
                     continue;
