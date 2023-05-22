@@ -83,23 +83,27 @@ impl Index {
         let db = db2;
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
-            let (content_metadata, image_metadata) = match content_metadata_future {
+            let process_file_result = match content_metadata_future {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("failed to read the thing {}", e);
                     continue;
                 }
             };
-            println!(
-                "{}: size = {}, blake3 = {}, blockhash = {}",
-                content_metadata.path.display(),
-                content_metadata.file_info.size,
-                content_metadata.blake3.encode_hex::<String>(),
-                image_metadata
-                    .as_ref()
-                    .map_or("none".into(), |im| hex::encode(&im.blockhash256)),
-            );
-            db.add_files(&[&content_metadata])?;
+            let content_metadata = process_file_result.content_metadata;
+            let image_metadata = process_file_result.image_metadata;
+            if process_file_result.blake3_computed {
+                println!(
+                    "{}: size = {}, blake3 = {}, blockhash = {}",
+                    content_metadata.path.display(),
+                    content_metadata.file_info.size,
+                    content_metadata.blake3.encode_hex::<String>(),
+                    image_metadata
+                        .as_ref()
+                        .map_or("none".into(), |im| hex::encode(&im.blockhash256)),
+                );
+                db.add_files(&[&content_metadata])?;
+            }
             if let Some(im) = image_metadata {
                 db.add_image_metadata(&content_metadata.blake3, &im)?;
             }
@@ -150,12 +154,20 @@ impl Index {
     }
 }
 
+struct ProcessFileResult {
+    blake3_computed: bool,
+    content_metadata: ContentMetadata,
+    image_metadata: Option<ImageMetadata>,
+}
+
 async fn process_file(
     db: Arc<Database>,
     path: PathBuf,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
-) -> Result<(ContentMetadata, Option<ImageMetadata>)> {
+) -> Result<ProcessFileResult> {
+    let mut blake3_computed = false;
+
     // TODO: only open the file once, and reuse it for any potential image hashing
     let b3 = match db_metadata {
         Some(ref record) => {
@@ -163,41 +175,44 @@ async fn process_file(
             if file_info == record.file_info {
                 record.blake3
             } else {
+                blake3_computed = true;
                 compute_blake3(&path).await?
             }
         }
         None => {
             // No record of this file - blake3 must be computed.
             //eprintln!("computing blake3 of {}", path.display());
+            blake3_computed = true;
             compute_blake3(&path).await?
         }
     };
 
     let mut image_metadata = None;
 
-/*
-    // TODO: is this an image?
-    if let Some(ext) = path.extension() {
-        if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
-            image_metadata = Some(match db.get_image_metadata(&b3)? {
-                Some(im) => im,
-                None => jpeg_perceptual_hash(&path)?,
-            });
-        } else if ext.eq_ignore_ascii_case("heic") {
-            image_metadata = Some(match db.get_image_metadata(&b3)? {
-                Some(im) => im,
-                None => heic_perceptual_hash(&path)?,
-            });
+    /*
+        // TODO: is this an image?
+        if let Some(ext) = path.extension() {
+            if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+                image_metadata = Some(match db.get_image_metadata(&b3)? {
+                    Some(im) => im,
+                    None => jpeg_perceptual_hash(&path)?,
+                });
+            } else if ext.eq_ignore_ascii_case("heic") {
+                image_metadata = Some(match db.get_image_metadata(&b3)? {
+                    Some(im) => im,
+                    None => heic_perceptual_hash(&path)?,
+                });
+            }
         }
-    }
-*/
+    */
 
-    Ok((
-        ContentMetadata {
+    Ok(ProcessFileResult {
+        blake3_computed,
+        content_metadata: ContentMetadata {
             path,
             file_info,
             blake3: b3,
         },
         image_metadata,
-    ))
+    })
 }
