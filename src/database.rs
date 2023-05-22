@@ -28,6 +28,9 @@ impl Database {
         let conn = Connection::open(&database_path)
             .with_context(|| format!("failed to open database at {}", database_path.display()))?;
 
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+
         // TODO: on newer SQLite, use STRICT
 
         conn.execute(
