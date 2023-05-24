@@ -74,12 +74,7 @@ impl Database {
                 &file.path.to_string_lossy(),
                 &file.file_info.inode,
                 &file.file_info.size,
-                // TODO: store mtime as i64 since epoch -- negative is okay
-                file.file_info
-                    .mtime
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos() as i64,
+                time_to_i64(&file.file_info.mtime),
                 &file.blake3,
             ))?;
         }
@@ -97,7 +92,7 @@ impl Database {
                     file_info: FileInfo {
                         inode: row.get(0)?,
                         size: row.get(1)?,
-                        mtime: SystemTime::UNIX_EPOCH + Duration::from_nanos(row.get(2)?),
+                        mtime: i64_to_time(row.get(2)?),
                     },
                     blake3: row.get(3)?,
                 })
@@ -152,4 +147,40 @@ pub fn get_database_path() -> Result<PathBuf> {
     path.push("imagehash.sqlite");
     //eprintln!("the path is {}", path.display());
     Ok(path)
+}
+
+fn time_to_i64(time: &SystemTime) -> i64 {
+    match time.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(d) => d.as_nanos() as i64,
+        Err(e) => -(e.duration().as_nanos() as i64),
+    }
+}
+
+fn i64_to_time(time: i64) -> SystemTime {
+    if time >= 0 {
+        SystemTime::UNIX_EPOCH + Duration::from_nanos(time as u64)
+    } else {
+        SystemTime::UNIX_EPOCH - Duration::from_nanos((-time) as u64)
+    }
+}
+
+mod tests {
+    use super::time_to_i64;
+    use super::i64_to_time;
+    use std::time::Duration;
+    use std::time::SystemTime;
+
+    #[test]
+    fn epoch_is_zero() {
+        assert_eq!(0, time_to_i64(&SystemTime::UNIX_EPOCH));
+        assert_eq!(SystemTime::UNIX_EPOCH, i64_to_time(0));
+    }
+
+    #[test]
+    fn ns_before_epoch() {
+        // Windows only has 100 ns precision.
+        let time = SystemTime::UNIX_EPOCH - Duration::from_nanos(100);
+        assert_eq!(-100, time_to_i64(&time));
+        assert_eq!(time, i64_to_time(-100));
+    }
 }
