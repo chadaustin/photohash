@@ -310,6 +310,7 @@ impl Db {
 enum Opt {
     Index(cmd::Index),
     Db(Db),
+    Diff(cmd::Diff),
     Benchmark(cmd::Benchmark),
 }
 
@@ -318,6 +319,7 @@ impl Opt {
         match self {
             Opt::Index(cmd) => cmd.run().await,
             Opt::Db(cmd) => cmd.run().await,
+            Opt::Diff(cmd) => cmd.run().await,
             Opt::Benchmark(cmd) => cmd.run().await,
         }
     }
