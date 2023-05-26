@@ -15,7 +15,8 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metad
             for entry in walkdir::WalkDir::new(path) {
                 let e = match entry {
                     Ok(e) => e,
-                    // TODO: propagate error?
+                    // TODO: propagate error? At least propagate that we failed to traverse a directory.
+                    // It would be unfortunate to delete records because a scan temporarily failed.
                     Err(e) => {
                         eprintln!("error from walkdir entry: {}", e);
                         continue;
@@ -58,7 +59,8 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Met
             for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(false) {
                 let e = match entry {
                     Ok(e) => e,
-                    // TODO: propagate error?
+                    // TODO: propagate error? At least propagate that we failed to traverse a directory.
+                    // It would be unfortunate to delete records because a scan temporarily failed.
                     Err(e) => {
                         eprintln!("error from jwalk entry: {}", e);
                         continue;

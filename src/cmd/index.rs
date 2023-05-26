@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
 use hex::ToHex;
+use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
 use crate::compute_blake3;
 use crate::heic_perceptual_hash;
@@ -36,61 +38,15 @@ impl Index {
         };
 
         let dirs: Vec<PathBuf> = dirs
-            .iter()
+            .into_iter()
             .map(|path| {
                 path.canonicalize()
                     .with_context(|| format!("failed to canonicalize {}", path.display()))
             })
             .collect::<Result<_, _>>()?;
 
-        let scanner = scan::get_scan();
-        let path_meta_rx = scanner(dirs);
+        let mut metadata_rx = do_index(&db, dirs);
 
-        let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
-
-        // Reads enumerated paths and computes necessary file metadata and content hashes.
-        let db2 = db.clone();
-        tokio::spawn(async move {
-            let io_semaphore = Arc::new(Semaphore::new(2));
-
-            while let Some((path, metadata)) = path_meta_rx.recv().await {
-                let metadata = match metadata {
-                    Ok(metadata) => metadata,
-                    Err(err) => {
-                        eprintln!("failed to read metadata of {}: {}", path.display(), err);
-                        continue;
-                    }
-                };
-
-                // Check the database to see if there's anything to recompute.
-                let db_metadata = match db.get_file(&path) {
-                    Ok(record) => record,
-                    Err(err) => {
-                        eprintln!("failed to read record for {}, {}", path.display(), err);
-                        continue;
-                    }
-                };
-
-                let io_semaphore = io_semaphore.clone();
-                let metadata_future = tokio::spawn({
-                    let db = db.clone();
-                    process_file(
-                        db,
-                        io_semaphore,
-                        path,
-                        FileInfo::from(&metadata),
-                        db_metadata,
-                    )
-                });
-
-                if let Err(_) = metadata_tx.send(metadata_future).await {
-                    eprintln!("receiver dropped");
-                    return;
-                }
-            }
-        });
-
-        let db = db2;
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
             let process_file_result = match content_metadata_future {
@@ -164,7 +120,61 @@ impl Index {
     }
 }
 
-struct ProcessFileResult {
+pub fn do_index(
+    db: &Arc<Database>,
+    dirs: Vec<PathBuf>,
+) -> mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>> {
+    let scanner = scan::get_scan();
+    let path_meta_rx = scanner(dirs);
+
+    let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
+
+    // Reads enumerated paths and computes necessary file metadata and content hashes.
+    let db = db.clone();
+    tokio::spawn(async move {
+        let io_semaphore = Arc::new(Semaphore::new(2));
+
+        while let Some((path, metadata)) = path_meta_rx.recv().await {
+            let metadata = match metadata {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    eprintln!("failed to read metadata of {}: {}", path.display(), err);
+                    continue;
+                }
+            };
+
+            // Check the database to see if there's anything to recompute.
+            let db_metadata = match db.get_file(&path) {
+                Ok(record) => record,
+                Err(err) => {
+                    eprintln!("failed to read record for {}, {}", path.display(), err);
+                    continue;
+                }
+            };
+
+            let io_semaphore = io_semaphore.clone();
+            let metadata_future = tokio::spawn({
+                let db = db.clone();
+                process_file(
+                    db,
+                    io_semaphore,
+                    path,
+                    FileInfo::from(&metadata),
+                    db_metadata,
+                )
+            });
+
+            if let Err(_) = metadata_tx.send(metadata_future).await {
+                eprintln!("receiver dropped");
+                return;
+            }
+        }
+    });
+
+    metadata_rx
+}
+
+pub struct ProcessFileResult {
     blake3_computed: bool,
     content_metadata: ContentMetadata,
     image_metadata: Option<ImageMetadata>,

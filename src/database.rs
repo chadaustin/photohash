@@ -165,8 +165,8 @@ fn i64_to_time(time: i64) -> SystemTime {
 }
 
 mod tests {
-    use super::time_to_i64;
     use super::i64_to_time;
+    use super::time_to_i64;
     use std::time::Duration;
     use std::time::SystemTime;
 
