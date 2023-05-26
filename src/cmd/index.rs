@@ -37,15 +37,7 @@ impl Index {
             self.dirs.clone()
         };
 
-        let dirs: Vec<PathBuf> = dirs
-            .into_iter()
-            .map(|path| {
-                path.canonicalize()
-                    .with_context(|| format!("failed to canonicalize {}", path.display()))
-            })
-            .collect::<Result<_, _>>()?;
-
-        let mut metadata_rx = do_index(&db, dirs);
+        let mut metadata_rx = do_index(&db, dirs)?;
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
@@ -123,7 +115,16 @@ impl Index {
 pub fn do_index(
     db: &Arc<Database>,
     dirs: Vec<PathBuf>,
-) -> mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>> {
+) -> Result<mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>>> {
+    // We have to canonicalize the paths.
+    let dirs: Vec<PathBuf> = dirs
+        .into_iter()
+        .map(|path| {
+            path.canonicalize()
+                .with_context(|| format!("failed to canonicalize {}", path.display()))
+        })
+        .collect::<Result<_, _>>()?;
+
     let scanner = scan::get_scan();
     let path_meta_rx = scanner(dirs);
 
@@ -171,13 +172,13 @@ pub fn do_index(
         }
     });
 
-    metadata_rx
+    Ok(metadata_rx)
 }
 
 pub struct ProcessFileResult {
-    blake3_computed: bool,
-    content_metadata: ContentMetadata,
-    image_metadata: Option<ImageMetadata>,
+    pub blake3_computed: bool,
+    pub content_metadata: ContentMetadata,
+    pub image_metadata: Option<ImageMetadata>,
 }
 
 async fn process_file(
