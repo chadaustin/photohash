@@ -199,7 +199,7 @@ async fn process_file(
             } else {
                 blake3_computed = true;
                 let permit = io_semaphore.acquire().await.unwrap();
-                compute_blake3(&path).await?
+                compute_blake3(path.clone()).await?
             }
         }
         None => {
@@ -207,7 +207,7 @@ async fn process_file(
             //eprintln!("computing blake3 of {}", path.display());
             blake3_computed = true;
             let permit = io_semaphore.acquire().await.unwrap();
-            compute_blake3(&path).await?
+            compute_blake3(path.clone()).await?
         }
     };
 

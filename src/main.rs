@@ -52,18 +52,20 @@ async fn sha1(path: &PathBuf) -> Result<Hash20> {
     Ok(hasher.finalize().into())
 }
 
-async fn compute_blake3(path: &PathBuf) -> Result<Hash32> {
-    let mut hasher = blake3::Hasher::new();
-    let mut file = tokio::fs::File::open(path).await?;
-    let mut buffer = [0u8; BUFFER_SIZE];
-    loop {
-        let n = file.read(&mut buffer).await?;
-        if n == 0 {
-            break;
+async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
+    tokio::task::spawn_blocking(move || {
+        let mut hasher = blake3::Hasher::new();
+        let mut file = std::fs::File::open(path)?;
+        let mut buffer = [0u8; BUFFER_SIZE];
+        loop {
+            let n = file.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buffer[..n]);
         }
-        hasher.update(&buffer[..n]);
-    }
-    Ok(hasher.finalize().into())
+        Ok(hasher.finalize().into())
+    }).await.unwrap()
 }
 
 struct HeifPerceptualImage<'a> {
