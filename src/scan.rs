@@ -56,7 +56,13 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Met
         let tx = path_tx.clone();
         rayon::spawn(move || {
             let mut cb = Vec::with_capacity(PARALLEL_CHANNEL_BATCH);
-            for entry in jwalk::WalkDir::new(&path).skip_hidden(false).sort(false) {
+            for entry in jwalk::WalkDir::new(&path)
+                .skip_hidden(false)
+                .sort(false)
+                .parallelism(jwalk::Parallelism::RayonDefaultPool {
+                    busy_timeout: std::time::Duration::from_secs(300),
+                })
+            {
                 let e = match entry {
                     Ok(e) => e,
                     // TODO: propagate error? At least propagate that we failed to traverse a directory.
