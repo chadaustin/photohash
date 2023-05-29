@@ -73,7 +73,7 @@ impl Database {
 
     pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let mut query = conn.prepare(
+        let mut query = conn.prepare_cached(
             "INSERT OR REPLACE INTO files
             (path, inode, size, mtime, blake3)
             VALUES (?, ?, ?, ?, ?)",
@@ -94,7 +94,7 @@ impl Database {
     pub fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<Option<ContentMetadata>> {
         let conn = self.conn.lock().unwrap();
         let mut query =
-            conn.prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")?;
+            conn.prepare_cached("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")?;
         Ok(query
             .query_row((&path.as_ref().to_string_lossy(),), |row| {
                 Ok(ContentMetadata {
@@ -116,7 +116,7 @@ impl Database {
         image_metadata: &ImageMetadata,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let mut query = conn.prepare(
+        let mut query = conn.prepare_cached(
             "INSERT OR REPLACE INTO images
             (blake3, width, height, blockhash256)
             VALUES (?, ?, ?, ?)",
