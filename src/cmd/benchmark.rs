@@ -5,6 +5,24 @@ use std::time::Instant;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
+#[structopt(name = "benchmark", about = "Benchmark directory scans")]
+pub enum Benchmark {
+    Walkdir(Walkdir),
+    Jwalk(Jwalk),
+    JwalkParStat(JwalkParStat),
+}
+
+impl Benchmark {
+    pub async fn run(&self) -> Result<()> {
+        match self {
+            Benchmark::Walkdir(cmd) => cmd.run().await,
+            Benchmark::Jwalk(cmd) => cmd.run().await,
+            Benchmark::JwalkParStat(cmd) => cmd.run().await,
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
 pub struct Walkdir {
     #[structopt(long)]
     stat: bool,
@@ -153,23 +171,5 @@ impl JwalkParStat {
         println!("jwalk-par-stat: {} ms", now.elapsed().as_millis());
         println!("stat calls: {}", stat_calls);
         Ok(())
-    }
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "benchmark", about = "Benchmark directory scans")]
-pub enum Benchmark {
-    Walkdir(Walkdir),
-    Jwalk(Jwalk),
-    JwalkParStat(JwalkParStat),
-}
-
-impl Benchmark {
-    pub async fn run(&self) -> Result<()> {
-        match self {
-            Benchmark::Walkdir(cmd) => cmd.run().await,
-            Benchmark::Jwalk(cmd) => cmd.run().await,
-            Benchmark::JwalkParStat(cmd) => cmd.run().await,
-        }
     }
 }
