@@ -1,6 +1,6 @@
 use criterion::*;
 use std::path::PathBuf;
-use database::Database;
+use imagehash::database::Database;
 
 fn database_benchmark(c: &mut Criterion) {
     c.bench_function("get_file", |b| {

@@ -8,10 +8,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use crate::ContentMetadata;
-use crate::FileInfo;
-use crate::Hash32;
-use crate::ImageMetadata;
+use crate::model::ContentMetadata;
+use crate::model::FileInfo;
+use crate::model::Hash32;
+use crate::model::ImageMetadata;
 
 pub struct Database {
     conn: Mutex<Connection>,
