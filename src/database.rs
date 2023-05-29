@@ -31,6 +31,16 @@ impl Database {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
 
+        Self::init_schema(conn)
+    }
+
+    pub fn open_memory() -> Result<Self> {
+        let conn = Connection::open_in_memory()?;
+
+        Self::init_schema(conn)
+    }
+
+    fn init_schema(conn: Connection) -> Result<Self> {
         // TODO: on newer SQLite, use STRICT
 
         conn.execute(
@@ -165,8 +175,8 @@ fn i64_to_time(time: i64) -> SystemTime {
 }
 
 mod tests {
-    use super::i64_to_time;
-    use super::time_to_i64;
+    use super::*;
+    use anyhow::Error;
     use std::time::Duration;
     use std::time::SystemTime;
 
@@ -182,5 +192,30 @@ mod tests {
         let time = SystemTime::UNIX_EPOCH - Duration::from_nanos(100);
         assert_eq!(-100, time_to_i64(&time));
         assert_eq!(time, i64_to_time(-100));
+    }
+
+    #[test]
+    fn in_memory_database() -> Result<()> {
+        let db = Database::open_memory()?;
+
+        let path = PathBuf::from("test");
+
+        assert_eq!(None, db.get_file(&path)?);
+
+        let cm = ContentMetadata {
+            path: path.clone(),
+            file_info: FileInfo {
+                inode: 10,
+                size: 20,
+                mtime: SystemTime::UNIX_EPOCH,
+            },
+            blake3: blake3::hash(b"foo").into(),
+        };
+        db.add_files(&[&cm])?;
+
+        let result = db.get_file(path)?.unwrap();
+        assert_eq!(10, result.file_info.inode);
+
+        Ok(())
     }
 }

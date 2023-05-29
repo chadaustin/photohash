@@ -11,7 +11,7 @@ pub type Hash20 = [u8; 20];
 pub type Hash32 = [u8; 32];
 
 /// Platform-independent subset of file information to be stored in SQLite.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct FileInfo {
     /// 0 on Windows for now. May contain file_index() when the API is stabilized.
     pub inode: u64,
@@ -44,6 +44,7 @@ impl FakeInode for std::fs::Metadata {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ContentMetadata {
     pub path: PathBuf,
 
@@ -54,6 +55,7 @@ pub struct ContentMetadata {
     pub blake3: Hash32,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct ImageMetadata {
     pub image_width: u32,
     pub image_height: u32,

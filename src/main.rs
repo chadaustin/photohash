@@ -65,7 +65,9 @@ async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
             hasher.update(&buffer[..n]);
         }
         Ok(hasher.finalize().into())
-    }).await.unwrap()
+    })
+    .await
+    .unwrap()
 }
 
 struct HeifPerceptualImage<'a> {
