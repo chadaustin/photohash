@@ -60,7 +60,6 @@ impl Index {
                         .as_ref()
                         .map_or("none".into(), |im| hex::encode(&im.blockhash256)),
                 );
-                db.add_files(&[&content_metadata])?;
             }
             if let Some(im) = image_metadata {
                 db.add_image_metadata(&content_metadata.blake3, &im)?;
@@ -211,6 +210,16 @@ async fn process_file(
         }
     };
 
+    let content_metadata = ContentMetadata {
+        path,
+        file_info,
+        blake3: b3,
+    };
+
+    if blake3_computed {
+        db.add_files(&[&content_metadata])?;
+    }
+
     let mut image_metadata = None;
 
     /*
@@ -232,11 +241,7 @@ async fn process_file(
 
     Ok(ProcessFileResult {
         blake3_computed,
-        content_metadata: ContentMetadata {
-            path,
-            file_info,
-            blake3: b3,
-        },
+        content_metadata: content_metadata,
         image_metadata,
     })
 }
