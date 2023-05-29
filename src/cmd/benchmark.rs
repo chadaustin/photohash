@@ -1,6 +1,10 @@
+use crate::cmd::index;
+use crate::database::Database;
 use crate::mpmc;
+use crate::scan;
 use anyhow::Result;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 use structopt::StructOpt;
 
@@ -10,6 +14,8 @@ pub enum Benchmark {
     Walkdir(Walkdir),
     Jwalk(Jwalk),
     JwalkParStat(JwalkParStat),
+    Scan(Scan),
+    Index(Index),
 }
 
 impl Benchmark {
@@ -18,6 +24,8 @@ impl Benchmark {
             Benchmark::Walkdir(cmd) => cmd.run().await,
             Benchmark::Jwalk(cmd) => cmd.run().await,
             Benchmark::JwalkParStat(cmd) => cmd.run().await,
+            Benchmark::Scan(cmd) => cmd.run().await,
+            Benchmark::Index(cmd) => cmd.run().await,
         }
     }
 }
@@ -170,6 +178,73 @@ impl JwalkParStat {
 
         println!("jwalk-par-stat: {} ms", now.elapsed().as_millis());
         println!("stat calls: {}", stat_calls);
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct Scan {
+    #[structopt(parse(from_os_str))]
+    path: PathBuf,
+    #[structopt(long, default_value = "1")]
+    batch: usize,
+}
+
+impl Scan {
+    async fn run(&self) -> Result<()> {
+        let scan = scan::get_scan();
+
+        let now = Instant::now();
+
+        let mut metadata_results = 0;
+
+        let rx = scan(vec![self.path.clone()]);
+        loop {
+            let results = rx.recv_many(self.batch).await;
+            if results.is_empty() {
+                break;
+            }
+            for (path, metadata_result) in results {
+                let _ = metadata_result?;
+                metadata_results += 1;
+            }
+        }
+
+        println!("scan: {} ms", now.elapsed().as_millis());
+        println!("metadata results: {}", metadata_results);
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct Index {
+    #[structopt(parse(from_os_str))]
+    path: PathBuf,
+
+    #[structopt(long)]
+    real_db: bool,
+}
+
+impl Index {
+    async fn run(&self) -> Result<()> {
+        let db = if self.real_db {
+            Arc::new(Database::open()?)
+        } else {
+            Arc::new(Database::open_memory()?)
+        };
+
+        let now = Instant::now();
+
+        let mut pfr_results = 0;
+
+        let mut rx = index::do_index(&db, vec![self.path.clone()])?;
+        while let Some(jh) = rx.recv().await {
+            let _: index::ProcessFileResult = jh.await.unwrap()?;
+            pfr_results += 1;
+        }
+
+        println!("index: {} ms", now.elapsed().as_millis());
+        println!("file results: {}", pfr_results);
         Ok(())
     }
 }
