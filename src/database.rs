@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
+use rusqlite::Statement;
+use self_cell::self_cell;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,8 +15,37 @@ use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 
+struct CachedStatements<'conn> {
+    get_file: Statement<'conn>,
+}
+
+unsafe impl Send for CachedStatements<'_> {}
+
+fn cache_statements<'conn>(conn: &'conn Connection) -> CachedStatements<'conn> {
+    CachedStatements {
+        get_file: conn
+            .prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")
+            .unwrap(),
+    }
+}
+
+self_cell!(
+    struct DatabaseInner {
+        owner: Connection,
+
+        #[covariant]
+        dependent: CachedStatements,
+    }
+);
+
+impl DatabaseInner {
+    fn conn(&self) -> &Connection {
+        self.borrow_owner()
+    }
+}
+
 pub struct Database {
-    conn: Mutex<Connection>,
+    inner: Mutex<DatabaseInner>,
 }
 
 impl Database {
@@ -67,13 +98,13 @@ impl Database {
         .context("failed to create `images` table")?;
 
         Ok(Database {
-            conn: Mutex::new(conn),
+            inner: Mutex::new(DatabaseInner::new(conn, cache_statements)),
         })
     }
 
     pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        let mut query = conn.prepare_cached(
+        let inner = self.inner.lock().unwrap();
+        let mut query = inner.conn().prepare_cached(
             "INSERT OR REPLACE INTO files
             (path, inode, size, mtime, blake3)
             VALUES (?, ?, ?, ?, ?)",
@@ -92,22 +123,23 @@ impl Database {
     }
 
     pub fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<Option<ContentMetadata>> {
-        let conn = self.conn.lock().unwrap();
-        let mut query =
-            conn.prepare_cached("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")?;
-        Ok(query
-            .query_row((&path.as_ref().to_string_lossy(),), |row| {
-                Ok(ContentMetadata {
-                    path: path.as_ref().to_path_buf(),
-                    file_info: FileInfo {
-                        inode: row.get(0)?,
-                        size: row.get(1)?,
-                        mtime: i64_to_time(row.get(2)?),
-                    },
-                    blake3: row.get(3)?,
+        let mut inner = self.inner.lock().unwrap();
+        inner.with_dependent_mut(|conn, stmt| {
+            Ok(stmt
+                .get_file
+                .query_row((&path.as_ref().to_string_lossy(),), |row| {
+                    Ok(ContentMetadata {
+                        path: path.as_ref().to_path_buf(),
+                        file_info: FileInfo {
+                            inode: row.get(0)?,
+                            size: row.get(1)?,
+                            mtime: i64_to_time(row.get(2)?),
+                        },
+                        blake3: row.get(3)?,
+                    })
                 })
-            })
-            .optional()?)
+                .optional()?)
+        })
     }
 
     pub fn add_image_metadata(
@@ -115,8 +147,8 @@ impl Database {
         blake3: &Hash32,
         image_metadata: &ImageMetadata,
     ) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        let mut query = conn.prepare_cached(
+        let inner = self.inner.lock().unwrap();
+        let mut query = inner.conn().prepare_cached(
             "INSERT OR REPLACE INTO images
             (blake3, width, height, blockhash256)
             VALUES (?, ?, ?, ?)",
@@ -131,9 +163,10 @@ impl Database {
     }
 
     pub fn get_image_metadata(&self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
-        let conn = self.conn.lock().unwrap();
-        let mut query =
-            conn.prepare("SELECT width, height, blockhash256 FROM images WHERE blake3 = ?")?;
+        let inner = self.inner.lock().unwrap();
+        let mut query = inner
+            .conn()
+            .prepare("SELECT width, height, blockhash256 FROM images WHERE blake3 = ?")?;
         Ok(query
             .query_row((&blake3,), |row| {
                 Ok(ImageMetadata {

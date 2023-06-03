@@ -50,6 +50,7 @@ img_hash = "*"
 jwalk = "*"
 libheif-rs = "*"
 rayon = "*"
+self_cell = "*"
 sha-1 = "*"
 structopt = "*"
 tokio = { version = "1", features = ["full"] }
