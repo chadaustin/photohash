@@ -14,6 +14,8 @@ use crate::model::Hash32;
 use crate::model::ImageMetadata;
 
 struct CachedStatements<'conn> {
+    begin_tx: Statement<'conn>,
+    commit_tx: Statement<'conn>,
     get_file: Statement<'conn>,
 }
 
@@ -21,6 +23,8 @@ unsafe impl Send for CachedStatements<'_> {}
 
 fn cache_statements<'conn>(conn: &'conn Connection) -> CachedStatements<'conn> {
     CachedStatements {
+        begin_tx: conn.prepare("BEGIN TRANSACTION").unwrap(),
+        commit_tx: conn.prepare("COMMIT").unwrap(),
         get_file: conn
             .prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")
             .unwrap(),
@@ -94,6 +98,38 @@ impl Database {
         .context("failed to create `images` table")?;
 
         Ok(Database(DatabaseInner::new(conn, cache_statements)))
+    }
+
+    /// For benchmarking.
+    pub fn rusqlite_transaction(&mut self) -> Result<()> {
+        self.conn().unchecked_transaction()?;
+        Ok(())
+    }
+
+    pub fn cached_immediate_transaction(&self) -> Result<()> {
+        let _ = self
+            .conn()
+            .prepare_cached("BEGIN IMMEDIATE TRANSACTION")?
+            .execute(())?;
+        let _ = self.conn().prepare_cached("COMMIT")?.execute(())?;
+        Ok(())
+    }
+
+    pub fn cached_deferred_transaction(&self) -> Result<()> {
+        let _ = self
+            .conn()
+            .prepare_cached("BEGIN DEFERRED TRANSACTION")?
+            .execute(())?;
+        let _ = self.conn().prepare_cached("COMMIT")?.execute(())?;
+        Ok(())
+    }
+
+    pub fn with_transaction(&mut self) -> Result<()> {
+        self.0.with_dependent_mut(|conn, stmt| {
+            let _ = stmt.begin_tx.execute(())?;
+            let _ = stmt.commit_tx.execute(())?;
+            Ok(())
+        })
     }
 
     pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
