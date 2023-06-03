@@ -4,6 +4,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::vec::Vec;
 use structopt::StructOpt;
 
@@ -38,7 +39,7 @@ impl Dots {
 
 impl Diff {
     pub async fn run(&self) -> Result<()> {
-        let db = Arc::new(Database::open()?);
+        let db = Arc::new(Mutex::new(Database::open()?));
 
         // Begin indexing the source in parallel.
         // TODO: If we could guarantee the output channel is sorted, we could

@@ -3,6 +3,7 @@ use hex::ToHex;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use structopt::StructOpt;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
@@ -29,7 +30,7 @@ pub struct Index {
 
 impl Index {
     pub async fn run(&self) -> Result<()> {
-        let db = Arc::new(Database::open()?);
+        let db = Arc::new(Mutex::new(Database::open()?));
 
         let dirs = if self.dirs.is_empty() {
             vec![".".into()]
@@ -62,7 +63,9 @@ impl Index {
                 );
             }
             if let Some(im) = image_metadata {
-                db.add_image_metadata(&content_metadata.blake3, &im)?;
+                db.lock()
+                    .unwrap()
+                    .add_image_metadata(&content_metadata.blake3, &im)?;
             }
         }
 
@@ -112,7 +115,7 @@ impl Index {
 }
 
 pub fn do_index(
-    db: &Arc<Database>,
+    db: &Arc<Mutex<Database>>,
     dirs: Vec<PathBuf>,
 ) -> Result<mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>>> {
     // We have to canonicalize the paths.
@@ -144,7 +147,7 @@ pub fn do_index(
             };
 
             // Check the database to see if there's anything to recompute.
-            let db_metadata = match db.get_file(&path) {
+            let db_metadata = match db.lock().unwrap().get_file(&path) {
                 Ok(record) => record,
                 Err(err) => {
                     eprintln!("failed to read record for {}, {}", path.display(), err);
@@ -181,7 +184,7 @@ pub struct ProcessFileResult {
 }
 
 async fn process_file(
-    db: Arc<Database>,
+    db: Arc<Mutex<Database>>,
     io_semaphore: Arc<Semaphore>,
     path: PathBuf,
     file_info: FileInfo,
@@ -217,7 +220,7 @@ async fn process_file(
     };
 
     if blake3_computed {
-        db.add_files(&[&content_metadata])?;
+        db.lock().unwrap().add_files(&[&content_metadata])?;
     }
 
     let mut image_metadata = None;

@@ -5,8 +5,6 @@ use rusqlite::Statement;
 use self_cell::self_cell;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -38,14 +36,12 @@ self_cell!(
     }
 );
 
-impl DatabaseInner {
-    fn conn(&self) -> &Connection {
-        self.borrow_owner()
-    }
-}
+pub struct Database(DatabaseInner);
 
-pub struct Database {
-    inner: Mutex<DatabaseInner>,
+impl Database {
+    fn conn(&self) -> &Connection {
+        self.0.borrow_owner()
+    }
 }
 
 impl Database {
@@ -97,14 +93,11 @@ impl Database {
         )
         .context("failed to create `images` table")?;
 
-        Ok(Database {
-            inner: Mutex::new(DatabaseInner::new(conn, cache_statements)),
-        })
+        Ok(Database(DatabaseInner::new(conn, cache_statements)))
     }
 
     pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
-        let inner = self.inner.lock().unwrap();
-        let mut query = inner.conn().prepare_cached(
+        let mut query = self.conn().prepare_cached(
             "INSERT OR REPLACE INTO files
             (path, inode, size, mtime, blake3)
             VALUES (?, ?, ?, ?, ?)",
@@ -122,9 +115,8 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<Option<ContentMetadata>> {
-        let mut inner = self.inner.lock().unwrap();
-        inner.with_dependent_mut(|conn, stmt| {
+    pub fn get_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Option<ContentMetadata>> {
+        self.0.with_dependent_mut(|conn, stmt| {
             Ok(stmt
                 .get_file
                 .query_row((&path.as_ref().to_string_lossy(),), |row| {
@@ -147,8 +139,7 @@ impl Database {
         blake3: &Hash32,
         image_metadata: &ImageMetadata,
     ) -> Result<()> {
-        let inner = self.inner.lock().unwrap();
-        let mut query = inner.conn().prepare_cached(
+        let mut query = self.conn().prepare_cached(
             "INSERT OR REPLACE INTO images
             (blake3, width, height, blockhash256)
             VALUES (?, ?, ?, ?)",
@@ -163,8 +154,7 @@ impl Database {
     }
 
     pub fn get_image_metadata(&self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
-        let inner = self.inner.lock().unwrap();
-        let mut query = inner
+        let mut query = self
             .conn()
             .prepare("SELECT width, height, blockhash256 FROM images WHERE blake3 = ?")?;
         Ok(query
@@ -229,7 +219,7 @@ mod tests {
 
     #[test]
     fn in_memory_database() -> Result<()> {
-        let db = Database::open_memory()?;
+        let mut db = Database::open_memory()?;
 
         let path = PathBuf::from("test");
 

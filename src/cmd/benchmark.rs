@@ -5,6 +5,7 @@ use crate::scan;
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 use structopt::StructOpt;
 
@@ -227,11 +228,11 @@ pub struct Index {
 
 impl Index {
     async fn run(&self) -> Result<()> {
-        let db = if self.real_db {
-            Arc::new(Database::open()?)
+        let db = Arc::new(Mutex::new(if self.real_db {
+            Database::open()?
         } else {
-            Arc::new(Database::open_memory()?)
-        };
+            Database::open_memory()?
+        }));
 
         let now = Instant::now();
 
