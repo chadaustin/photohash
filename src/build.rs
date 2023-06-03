@@ -1,5 +1,6 @@
-fn main() {
+fn main() -> Result<(), vcpkg::Error> {
     if cfg!(windows) {
-        vcpkg::find_package("libheif").unwrap();
+        vcpkg::find_package("libheif")?;
     }
+    Ok(())
 }
