@@ -54,7 +54,7 @@ impl Diff {
         while let Some(pfr_future) = dst_rx.recv().await {
             let pfr = pfr_future.await??;
             dots.increment();
-            dst_contents.insert(pfr.content_metadata.blake3, pfr.content_metadata.path);
+            dst_contents.insert(pfr.content_metadata.blake3, pfr.path);
         }
         eprintln!();
 
@@ -62,7 +62,7 @@ impl Diff {
 
         while let Some(pfr_future) = src_rx.recv().await {
             let pfr = pfr_future.await??;
-            src_contents.push((pfr.content_metadata.path, pfr.content_metadata.blake3));
+            src_contents.push((pfr.path, pfr.content_metadata.blake3));
         }
 
         src_contents.sort();

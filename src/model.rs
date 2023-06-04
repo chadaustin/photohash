@@ -51,8 +51,6 @@ impl FakeInode for std::fs::Metadata {
 
 #[derive(Debug, PartialEq)]
 pub struct ContentMetadata {
-    pub path: IMPath,
-
     pub file_info: FileInfo,
 
     // Content attributes

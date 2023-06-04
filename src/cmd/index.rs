@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use crate::compute_blake3;
 use crate::heic_perceptual_hash;
 use crate::jpeg_perceptual_hash;
+use crate::model::IMPath;
 use crate::model::ImageMetadata;
 use crate::scan;
 use crate::ContentMetadata;
@@ -55,7 +56,7 @@ impl Index {
             if process_file_result.blake3_computed {
                 println!(
                     "{}: size = {}, blake3 = {}, blockhash = {}",
-                    content_metadata.path,
+                    process_file_result.path,
                     content_metadata.file_info.size,
                     content_metadata.blake3.encode_hex::<String>(),
                     image_metadata
@@ -179,6 +180,7 @@ pub fn do_index(
 }
 
 pub struct ProcessFileResult {
+    pub path: IMPath,
     pub blake3_computed: bool,
     pub content_metadata: ContentMetadata,
     pub image_metadata: Option<ImageMetadata>,
@@ -217,13 +219,14 @@ async fn process_file(
     };
 
     let content_metadata = ContentMetadata {
-        path,
         file_info,
         blake3: b3,
     };
 
     if blake3_computed {
-        db.lock().unwrap().add_files(&[&content_metadata])?;
+        db.lock()
+            .unwrap()
+            .add_files(&[(&path, &content_metadata)])?;
     }
 
     let mut image_metadata = None;
@@ -246,6 +249,7 @@ async fn process_file(
     */
 
     Ok(ProcessFileResult {
+        path,
         blake3_computed,
         content_metadata: content_metadata,
         image_metadata,

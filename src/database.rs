@@ -34,10 +34,10 @@ fn cache_statements<'conn>(conn: &'conn Connection) -> CachedStatements<'conn> {
         rollback_tx: conn.prepare("ROLLBACK").unwrap(),
         // TODO: We could elide `path` from the singular case because we already know it.
         get_file: conn
-            .prepare("SELECT path, inode, size, mtime, blake3 FROM files WHERE path = ?")
+            .prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")
             .unwrap(),
         get_files_10: conn
-            .prepare("SELECT path, inode, size, mtime, blake3 FROM files WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .prepare("SELECT inode, size, mtime, blake3, path FROM files WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .unwrap(),
     }
 }
@@ -158,15 +158,14 @@ impl Database {
         })
     }
 
-    fn file_from_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
+    fn file_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
         Ok(ContentMetadata {
-            path: row.get(0)?,
             file_info: FileInfo {
-                inode: row.get(1)?,
-                size: row.get(2)?,
-                mtime: i64_to_time(row.get(3)?),
+                inode: row.get(0)?,
+                size: row.get(1)?,
+                mtime: i64_to_time(row.get(2)?),
             },
-            blake3: row.get(4)?,
+            blake3: row.get(3)?,
         })
     }
 
@@ -174,7 +173,7 @@ impl Database {
         self.0.with_dependent_mut(|conn, stmt| {
             Ok(stmt
                 .get_file
-                .query_row((path,), Self::file_from_row)
+                .query_row((path,), Self::file_from_single_row)
                 .optional()?)
         })
     }
@@ -184,48 +183,54 @@ impl Database {
         PS: AsRef<[P]>,
         P: AsRef<str> + Copy,
     {
+        const N: usize = 10;
+
         self.with_transaction(|conn, stmt| {
             let paths = paths.as_ref();
             let mut results = Vec::with_capacity(paths.len());
 
-            let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<10>();
+            let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<N>();
             while let Some(chunk) = chunks.next() {
-                for info in stmt.get_files_10.query_map(chunk, Self::file_from_row)? {
-                    results.push(info?);
+                let i = results.len();
+                results.resize_with(results.len() + N, || None);
+
+                let mut rows = stmt.get_files_10.query(chunk)?;
+                while let Some(row) = rows.next()? {
+                    let path_ref = row.get_ref(4)?;
+                    for j in i..(i + N) {
+                        if paths[j].as_ref() == path_ref.as_str()? {
+                            results[j] = Some(Self::file_from_single_row(row)?);
+                            break;
+                        }
+                    }
                 }
             }
 
             // TODO: Add bulk select variants for all chunk sizes.
-            // stmt.get_file(...)
             if let Some(remainder) = chunks.into_remainder() {
                 for path in remainder {
-                    panic!("testing");
+                    results.push(
+                        stmt.get_file
+                            .query_row((path,), Self::file_from_single_row)
+                            .optional()?,
+                    );
                 }
             }
 
-            let mut hm = HashMap::with_capacity(paths.len());
-            for result in results {
-                // TODO: Is there a way to avoid this clone?
-                hm.insert(result.path.clone(), result);
-            }
-
-            let mut results = Vec::with_capacity(paths.len());
-            for path in paths {
-                results.push(hm.remove(&String::from(path.as_ref())));
-            }
+            assert_eq!(results.len(), paths.len());
             Ok(results)
         })
     }
 
-    pub fn add_files(&self, files: &[&ContentMetadata]) -> Result<()> {
+    pub fn add_files(&self, files: &[(&str, &ContentMetadata)]) -> Result<()> {
         let mut query = self.conn().prepare_cached(
             "INSERT OR REPLACE INTO files
             (path, inode, size, mtime, blake3)
             VALUES (?, ?, ?, ?, ?)",
         )?;
-        for file in files {
+        for (path, file) in files {
             query.execute((
-                &file.path,
+                path,
                 &file.file_info.inode,
                 &file.file_info.size,
                 time_to_i64(&file.file_info.mtime),
@@ -327,7 +332,6 @@ mod tests {
         assert_eq!(None, db.get_file(&path)?);
 
         let cm = ContentMetadata {
-            path: path.clone(),
             file_info: FileInfo {
                 inode: 10,
                 size: 20,
@@ -335,7 +339,7 @@ mod tests {
             },
             blake3: blake3::hash(b"foo").into(),
         };
-        db.add_files(&[&cm])?;
+        db.add_files(&[(&path, &cm)])?;
 
         let result = db.get_file(&path)?.unwrap();
         assert_eq!(10, result.file_info.inode);
