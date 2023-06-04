@@ -1,8 +1,12 @@
+#![feature(iter_array_chunks)]
+
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Statement;
 use self_cell::self_cell;
+use std::collections::HashMap;
+use std::convert::TryInto;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -13,10 +17,12 @@ use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 
-struct CachedStatements<'conn> {
+pub struct CachedStatements<'conn> {
     begin_tx: Statement<'conn>,
     commit_tx: Statement<'conn>,
+    rollback_tx: Statement<'conn>,
     get_file: Statement<'conn>,
+    get_files_10: Statement<'conn>,
 }
 
 unsafe impl Send for CachedStatements<'_> {}
@@ -25,8 +31,13 @@ fn cache_statements<'conn>(conn: &'conn Connection) -> CachedStatements<'conn> {
     CachedStatements {
         begin_tx: conn.prepare("BEGIN TRANSACTION").unwrap(),
         commit_tx: conn.prepare("COMMIT").unwrap(),
+        rollback_tx: conn.prepare("ROLLBACK").unwrap(),
+        // TODO: We could elide `path` from the singular case because we already know it.
         get_file: conn
-            .prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")
+            .prepare("SELECT path, inode, size, mtime, blake3 FROM files WHERE path = ?")
+            .unwrap(),
+        get_files_10: conn
+            .prepare("SELECT path, inode, size, mtime, blake3 FROM files WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .unwrap(),
     }
 }
@@ -44,6 +55,10 @@ pub struct Database(DatabaseInner);
 
 impl Database {
     fn conn(&self) -> &Connection {
+        self.0.borrow_owner()
+    }
+
+    fn conn_mut(&mut self) -> &Connection {
         self.0.borrow_owner()
     }
 }
@@ -124,11 +139,81 @@ impl Database {
         Ok(())
     }
 
-    pub fn with_transaction(&mut self) -> Result<()> {
+    pub fn with_transaction<T, F>(&mut self, f: F) -> Result<T>
+    where
+        F: FnOnce(&Connection, &mut CachedStatements) -> Result<T>,
+    {
         self.0.with_dependent_mut(|conn, stmt| {
             let _ = stmt.begin_tx.execute(())?;
-            let _ = stmt.commit_tx.execute(())?;
-            Ok(())
+            let result = f(conn, stmt);
+            match &result {
+                Ok(_) => {
+                    stmt.commit_tx.execute(())?;
+                }
+                Err(_) => {
+                    stmt.rollback_tx.execute(())?;
+                }
+            }
+            result
+        })
+    }
+
+    fn file_from_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
+        Ok(ContentMetadata {
+            path: row.get(0)?,
+            file_info: FileInfo {
+                inode: row.get(1)?,
+                size: row.get(2)?,
+                mtime: i64_to_time(row.get(3)?),
+            },
+            blake3: row.get(4)?,
+        })
+    }
+
+    pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
+        self.0.with_dependent_mut(|conn, stmt| {
+            Ok(stmt
+                .get_file
+                .query_row((path,), Self::file_from_row)
+                .optional()?)
+        })
+    }
+
+    pub fn get_files<PS, P>(&mut self, paths: PS) -> Result<Vec<Option<ContentMetadata>>>
+    where
+        PS: AsRef<[P]>,
+        P: AsRef<str> + Copy,
+    {
+        self.with_transaction(|conn, stmt| {
+            let paths = paths.as_ref();
+            let mut results = Vec::with_capacity(paths.len());
+
+            let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<10>();
+            while let Some(chunk) = chunks.next() {
+                for info in stmt.get_files_10.query_map(chunk, Self::file_from_row)? {
+                    results.push(info?);
+                }
+            }
+
+            // TODO: Add bulk select variants for all chunk sizes.
+            // stmt.get_file(...)
+            if let Some(remainder) = chunks.into_remainder() {
+                for path in remainder {
+                    panic!("testing");
+                }
+            }
+
+            let mut hm = HashMap::with_capacity(paths.len());
+            for result in results {
+                // TODO: Is there a way to avoid this clone?
+                hm.insert(result.path.clone(), result);
+            }
+
+            let mut results = Vec::with_capacity(paths.len());
+            for path in paths {
+                results.push(hm.remove(&String::from(path.as_ref())));
+            }
+            Ok(results)
         })
     }
 
@@ -148,25 +233,6 @@ impl Database {
             ))?;
         }
         Ok(())
-    }
-
-    pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
-        self.0.with_dependent_mut(|conn, stmt| {
-            Ok(stmt
-                .get_file
-                .query_row((path,), |row| {
-                    Ok(ContentMetadata {
-                        path: String::from(path),
-                        file_info: FileInfo {
-                            inode: row.get(0)?,
-                            size: row.get(1)?,
-                            mtime: i64_to_time(row.get(2)?),
-                        },
-                        blake3: row.get(3)?,
-                    })
-                })
-                .optional()?)
-        })
     }
 
     pub fn add_image_metadata(

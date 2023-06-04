@@ -1,6 +1,6 @@
-use anyhow::Result;
 use crate::model::IMPath;
 use crate::mpmc;
+use anyhow::Result;
 use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
