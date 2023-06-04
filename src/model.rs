@@ -1,5 +1,4 @@
 use std::fs::Metadata;
-use std::path::PathBuf;
 use std::time::SystemTime;
 
 #[cfg(unix)]
@@ -10,10 +9,16 @@ use std::os::windows::fs::MetadataExt;
 pub type Hash20 = [u8; 20];
 pub type Hash32 = [u8; 32];
 
-/// Platform-independent subset of file information to be stored in SQLite.
+/// Only support unicode filenames for efficient conversion into and
+/// out of SQLite.
+pub type IMPath = String;
+
+/// Platform-independent subset of file information to be stored in
+/// SQLite.
 #[derive(Debug, PartialEq)]
 pub struct FileInfo {
-    /// 0 on Windows for now. May contain file_index() when the API is stabilized.
+    /// 0 on Windows for now. May contain file_index() when the API is
+    /// stabilized.
     pub inode: u64,
     pub size: u64,
     /// mtime in the local platform's units
@@ -46,7 +51,7 @@ impl FakeInode for std::fs::Metadata {
 
 #[derive(Debug, PartialEq)]
 pub struct ContentMetadata {
-    pub path: PathBuf,
+    pub path: IMPath,
 
     pub file_info: FileInfo,
 

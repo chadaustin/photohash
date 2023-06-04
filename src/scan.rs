@@ -1,11 +1,12 @@
-use crate::mpmc;
 use anyhow::Result;
+use crate::model::IMPath;
+use crate::mpmc;
 use std::fs::Metadata;
 use std::path::{Path, PathBuf};
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
@@ -25,12 +26,16 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metad
                 if !e.file_type().is_file() {
                     continue;
                 }
+                let Some(path) = e.path().to_str().map(String::from) else {
+                    // Skip non-unicode paths.
+                    continue;
+                };
 
                 // The serial scan primarily exists because WSL1 fast-paths the
                 // readdir, serial stat access pattern. It's significantly faster
                 // than a parallel crawl and random access stat pattern.
                 let metadata = e.metadata().map_err(anyhow::Error::from);
-                cb.push((e.into_path(), metadata));
+                cb.push((path, metadata));
                 if cb.len() == cb.capacity() {
                     cb = tx.send_many(cb).unwrap();
                 }
@@ -48,7 +53,7 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metad
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
@@ -75,8 +80,12 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Met
                 if !e.file_type().is_file() {
                     continue;
                 }
+                let Some(path) = e.path().to_str().map(String::from) else {
+                    // Skip non-unicode paths.
+                    continue;
+                };
 
-                cb.push(e.path());
+                cb.push(path);
                 if cb.len() == cb.capacity() {
                     cb = tx.send_many(cb).unwrap();
                 }
@@ -136,7 +145,7 @@ fn prefer_serial_scan() -> bool {
     true
 }
 
-pub fn get_scan() -> fn(Vec<PathBuf>) -> mpmc::Receiver<(PathBuf, Result<Metadata>)> {
+pub fn get_scan() -> fn(Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
     if prefer_serial_scan() {
         serial_scan
     } else {

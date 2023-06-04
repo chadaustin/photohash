@@ -74,7 +74,7 @@ impl Diff {
                     first = false;
                     eprintln!("Files not in destination:");
                 }
-                println!("  {}", path.display());
+                println!("  {}", path);
             }
         }
 

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use hex::ToHex;
 use std::future::Future;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use structopt::StructOpt;
@@ -54,7 +55,7 @@ impl Index {
             if process_file_result.blake3_computed {
                 println!(
                     "{}: size = {}, blake3 = {}, blockhash = {}",
-                    content_metadata.path.display(),
+                    content_metadata.path,
                     content_metadata.file_info.size,
                     content_metadata.blake3.encode_hex::<String>(),
                     image_metadata
@@ -141,7 +142,7 @@ pub fn do_index(
             let metadata = match metadata {
                 Ok(metadata) => metadata,
                 Err(err) => {
-                    eprintln!("failed to read metadata of {}: {}", path.display(), err);
+                    eprintln!("failed to read metadata of {}: {}", path, err);
                     continue;
                 }
             };
@@ -150,7 +151,7 @@ pub fn do_index(
             let db_metadata = match db.lock().unwrap().get_file(&path) {
                 Ok(record) => record,
                 Err(err) => {
-                    eprintln!("failed to read record for {}, {}", path.display(), err);
+                    eprintln!("failed to read record for {}, {}", path, err);
                     continue;
                 }
             };
@@ -186,7 +187,7 @@ pub struct ProcessFileResult {
 async fn process_file(
     db: Arc<Mutex<Database>>,
     io_semaphore: Arc<Semaphore>,
-    path: PathBuf,
+    path: String,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
 ) -> Result<ProcessFileResult> {
@@ -201,7 +202,8 @@ async fn process_file(
             } else {
                 blake3_computed = true;
                 let permit = io_semaphore.acquire().await.unwrap();
-                compute_blake3(path.clone()).await?
+                // TODO: use into_ok() when it's stabilized
+                compute_blake3(PathBuf::from_str(&path).unwrap()).await?
             }
         }
         None => {
@@ -209,7 +211,8 @@ async fn process_file(
             //eprintln!("computing blake3 of {}", path.display());
             blake3_computed = true;
             let permit = io_semaphore.acquire().await.unwrap();
-            compute_blake3(path.clone()).await?
+            // TODO: use into_ok() when it's stabilized
+            compute_blake3(PathBuf::from_str(&path).unwrap()).await?
         }
     };
 

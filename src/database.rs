@@ -140,8 +140,7 @@ impl Database {
         )?;
         for file in files {
             query.execute((
-                // TODO: store paths as UTF-8
-                &file.path.to_string_lossy(),
+                &file.path,
                 &file.file_info.inode,
                 &file.file_info.size,
                 time_to_i64(&file.file_info.mtime),
@@ -151,13 +150,13 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Option<ContentMetadata>> {
+    pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
         self.0.with_dependent_mut(|conn, stmt| {
             Ok(stmt
                 .get_file
-                .query_row((&path.as_ref().to_string_lossy(),), |row| {
+                .query_row((path,), |row| {
                     Ok(ContentMetadata {
-                        path: path.as_ref().to_path_buf(),
+                        path: String::from(path),
                         file_info: FileInfo {
                             inode: row.get(0)?,
                             size: row.get(1)?,
@@ -257,7 +256,7 @@ mod tests {
     fn in_memory_database() -> Result<()> {
         let mut db = Database::open_memory()?;
 
-        let path = PathBuf::from("test");
+        let path = String::from("test");
 
         assert_eq!(None, db.get_file(&path)?);
 
@@ -272,7 +271,7 @@ mod tests {
         };
         db.add_files(&[&cm])?;
 
-        let result = db.get_file(path)?.unwrap();
+        let result = db.get_file(&path)?.unwrap();
         assert_eq!(10, result.file_info.inode);
 
         Ok(())
