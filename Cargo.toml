@@ -48,6 +48,7 @@ futures = "*"
 hex = "*"
 img_hash = "*"
 jwalk = "*"
+ntapi = "*"
 libheif-rs = "*"
 rayon = "*"
 self_cell = "*"
@@ -56,6 +57,7 @@ structopt = "*"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
 wild = "*"
+winapi = "*"
 
 [target.'cfg(windows)'.dependencies]
 rusqlite = { version = "*", features = ["bundled"] }

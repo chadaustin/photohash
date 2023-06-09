@@ -963,6 +963,7 @@ dependencies = [
  "img_hash",
  "jwalk",
  "libheif-rs",
+ "ntapi",
  "rayon",
  "rusqlite",
  "self_cell",
@@ -972,6 +973,7 @@ dependencies = [
  "vcpkg",
  "walkdir",
  "wild",
+ "winapi",
 ]
 
 [[package]]
@@ -1196,6 +1198,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 dependencies = [
  "getrandom",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8a3895c6391c39d7fe7ebc444a87eb2991b2a0bc718fdabd071eec617fc68e4"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]

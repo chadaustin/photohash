@@ -126,6 +126,10 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Meta
     meta_rx
 }
 
+mod win;
+
+type ScanFn = fn(Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)>;
+
 #[cfg(target_os = "linux")]
 fn prefer_serial_scan() -> bool {
     match std::fs::read_to_string("/proc/version_signature") {
@@ -145,10 +149,13 @@ fn prefer_serial_scan() -> bool {
     true
 }
 
-pub fn get_scan() -> fn(Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
-    if prefer_serial_scan() {
-        serial_scan
-    } else {
-        parallel_scan
-    }
+pub fn get_scan() -> ScanFn {
+    win::windows_scan
+    /*
+        if prefer_serial_scan() {
+            serial_scan
+        } else {
+            parallel_scan
+        }
+    */
 }
