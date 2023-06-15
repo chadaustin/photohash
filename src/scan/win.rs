@@ -154,6 +154,12 @@ impl DirectoryHandle {
 
 pub struct Entry<'a> {
     name: &'a [u16],
+    btime: u64,
+    atime: u64,
+    mtime: u64,
+    ctime: u64,
+    size: u64,
+    attr: u32,
 }
 
 impl<'a> Entry<'a> {
@@ -226,14 +232,22 @@ impl Entries<'_> {
         } else {
             Some(next + e.NextEntryOffset)
         };
-        return Some(Ok(Entry {
-            name: unsafe {
-                std::slice::from_raw_parts(
+        Some(Ok(unsafe {
+            Entry {
+                name: std::slice::from_raw_parts(
                     ptr::addr_of!(e.FileName) as *const u16,
                     (e.FileNameLength / 2) as usize,
-                )
-            },
-        }));
+                ),
+                // TODO: Explore what it means for any of these to
+                // have the sign bit set.
+                btime: *e.CreationTime.QuadPart() as u64,
+                atime: *e.LastAccessTime.QuadPart() as u64,
+                mtime: *e.LastWriteTime.QuadPart() as u64,
+                ctime: *e.ChangeTime.QuadPart() as u64,
+                size: *e.EndOfFile.QuadPart() as u64,
+                attr: e.FileAttributes,
+            }
+        }))
     }
 }
 
