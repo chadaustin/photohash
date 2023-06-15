@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fs::Metadata;
 use std::time::SystemTime;
 
@@ -25,8 +26,9 @@ pub struct FileInfo {
     pub mtime: SystemTime,
 }
 
-impl From<&Metadata> for FileInfo {
-    fn from(metadata: &Metadata) -> FileInfo {
+impl<T: Borrow<Metadata>> From<T> for FileInfo {
+    fn from(metadata: T) -> FileInfo {
+        let metadata = metadata.borrow();
         FileInfo {
             inode: metadata.ino(),
             size: metadata.len(),

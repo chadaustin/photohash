@@ -1,4 +1,4 @@
-use crate::model::IMPath;
+use crate::model::{IMPath, FileInfo};
 use crate::mpmc;
 use anyhow::Result;
 use std::fs::Metadata;
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
+pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
@@ -35,7 +35,7 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result
                 // readdir, serial stat access pattern. It's significantly faster
                 // than a parallel crawl and random access stat pattern.
                 let metadata = e.metadata().map_err(anyhow::Error::from);
-                cb.push((path, metadata));
+                cb.push((path, metadata.map(From::from)));
                 if cb.len() == cb.capacity() {
                     cb = tx.send_many(cb).unwrap();
                 }
@@ -53,7 +53,7 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
+pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
@@ -111,7 +111,7 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Resu
                         .into_iter()
                         .map(|p| {
                             let metadata =
-                                std::fs::symlink_metadata(&p).map_err(anyhow::Error::from);
+                                std::fs::symlink_metadata(&p).map(From::from).map_err(anyhow::Error::from);
                             (p, metadata)
                         })
                         .collect::<Vec<_>>(),
@@ -128,7 +128,7 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Resu
 
 mod win;
 
-type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>>;
+type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
 
 #[cfg(target_os = "linux")]
 fn prefer_serial_scan() -> bool {

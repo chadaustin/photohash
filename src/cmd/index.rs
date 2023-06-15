@@ -164,7 +164,7 @@ pub fn do_index(
                     db,
                     io_semaphore,
                     path,
-                    FileInfo::from(&metadata),
+                    metadata,
                     db_metadata,
                 )
             });

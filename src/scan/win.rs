@@ -1,5 +1,5 @@
 use crate::mpmc;
-use crate::scan::IMPath;
+use crate::model::{IMPath, FileInfo};
 use anyhow::Result;
 use std::ffi::c_void;
 use std::ffi::OsString;
@@ -306,7 +306,7 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     })
 }
 
-pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
+pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
     for path in paths {
