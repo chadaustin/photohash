@@ -4,8 +4,10 @@ use anyhow::Result;
 use std::ffi::c_void;
 use std::ffi::OsString;
 use std::fs::Metadata;
+use std::io;
 use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStringExt;
+use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
 
@@ -40,18 +42,32 @@ use winapi::um::winnt::FILE_SHARE_WRITE;
 use winapi::um::winnt::FILE_TRAVERSE;
 use winapi::um::winnt::SYNCHRONIZE;
 
+pub struct DirectoryHandle {
+    handle: HANDLE,
+}
+
+impl DirectoryHandle {}
+
+fn to_device_path<P: AsRef<Path>>(path: P) -> io::Result<Vec<u16>> {
+    let path = path.as_ref().canonicalize()?;
+    eprintln!("path = {}", path.display());
+    let mut v: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if !v.starts_with(&[b'\\', b'\\', b'?', b'\\'].map(|c| c as u16)) {
+        // TODO: use InvalidFilename when stabilized?
+        return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    }
+    // NtCreateFile requires absolute device paths.
+    // \??\ is an alias for \DosDevices\ that's faster to parse in
+    // Object Manager.
+    v[1] = b'?' as u16;
+    Ok(v)
+}
+
 pub fn windows_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
     for path in paths {
-        eprintln!("path: {}", path.display());
-        eprintln!("path: {}", path.canonicalize().expect("yes").display());
-
-        let mut path = path
-            .as_os_str()
-            .encode_wide()
-            //.chain(Some(0))
-            .collect::<Vec<_>>();
+        let mut path = to_device_path(path).unwrap();
 
         let mut unicode_string = UNICODE_STRING {
             Length: 2 * path.len() as u16,
@@ -133,16 +149,16 @@ pub fn windows_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metad
         eprintln!("first p = {:?}", p);
         loop {
             let ref e = unsafe { p.as_ref().unwrap() };
-            eprintln!("p = {:?}", p);
-            eprintln!("NextEntryOffset: {}", e.NextEntryOffset);
-            eprintln!("FileNameLength: {}", e.FileNameLength);
+            //eprintln!("p = {:?}", p);
+            //eprintln!("NextEntryOffset: {}", e.NextEntryOffset);
+            //eprintln!("FileNameLength: {}", e.FileNameLength);
             let name = OsString::from_wide(unsafe {
                 std::slice::from_raw_parts(
                     ptr::addr_of!(e.FileName) as *const u16,
                     (e.FileNameLength / 2) as usize,
                 )
             });
-            eprintln!("Name = {:?}", name);
+            eprintln!("{:?}", name);
 
             if e.NextEntryOffset == 0 {
                 break;
