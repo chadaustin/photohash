@@ -71,10 +71,10 @@ impl Drop for DirectoryHandle {
 }
 
 impl DirectoryHandle {
-    fn open<P: AsRef<Path>>(path: P) -> io::Result<DirectoryHandle> {
+    pub fn open<P: AsRef<Path>>(path: P) -> io::Result<DirectoryHandle> {
         let mut path = to_device_path(path)?;
 
-        let mut unicode_string = unicode_string(&mut path)?;
+        let mut unicode_string = unicode_string(&path)?;
 
         let mut object_attributes = MaybeUninit::uninit();
         () = unsafe {
@@ -87,13 +87,44 @@ impl DirectoryHandle {
             )
         };
 
+        Self::do_open(object_attributes.as_mut_ptr())
+    }
+
+    pub fn open_child(&self, path: &[u16]) -> io::Result<DirectoryHandle> {
+        let mut unicode_string = unicode_string(path)?;
+
+        let mut object_attributes = MaybeUninit::uninit();
+        () = unsafe {
+            InitializeObjectAttributes(
+                object_attributes.as_mut_ptr(),
+                &mut unicode_string,
+                OBJ_CASE_INSENSITIVE | OBJ_OPENIF,
+                self.handle,
+                ptr::null_mut(),
+            )
+        };
+
+        Self::do_open(object_attributes.as_mut_ptr())
+    }
+
+    pub fn entries(&self) -> Entries<'_> {
+        Entries {
+            handle: self.handle,
+            done: false,
+            buffer: unsafe { walloc(BUFFER_SIZE) },
+            next: None,
+            marker: PhantomData,
+        }
+    }
+
+    fn do_open(object_attributes: *mut OBJECT_ATTRIBUTES) -> io::Result<DirectoryHandle> {
         let mut io_status_block = MaybeUninit::zeroed();
         let mut handle = MaybeUninit::zeroed();
         let status: NTSTATUS = unsafe {
             NtCreateFile(
                 handle.as_mut_ptr(),
                 FILE_LIST_DIRECTORY | FILE_TRAVERSE | SYNCHRONIZE, // FILE_READ_ATTRIBUTES?
-                object_attributes.as_mut_ptr(),
+                object_attributes,
                 io_status_block.as_mut_ptr(),
                 ptr::null_mut(),       // AllocationSize
                 FILE_ATTRIBUTE_NORMAL, // FileAttributes
@@ -114,16 +145,6 @@ impl DirectoryHandle {
         Ok(DirectoryHandle {
             handle: unsafe { handle.assume_init() },
         })
-    }
-
-    fn entries(&self) -> Entries<'_> {
-        Entries {
-            handle: self.handle,
-            done: false,
-            buffer: unsafe { walloc(BUFFER_SIZE) },
-            next: None,
-            marker: PhantomData,
-        }
     }
 }
 
@@ -251,7 +272,7 @@ fn to_device_path<P: AsRef<Path>>(path: P) -> io::Result<Vec<u16>> {
     Ok(v)
 }
 
-fn unicode_string(path: &mut [u16]) -> io::Result<UNICODE_STRING> {
+fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     // The documentation
     if path.len() >= 32767 {
         // TODO: use InvalidFilename when stabilized?
@@ -263,7 +284,7 @@ fn unicode_string(path: &mut [u16]) -> io::Result<UNICODE_STRING> {
     Ok(UNICODE_STRING {
         Length: 2 * path.len() as u16,
         MaximumLength: 2 * path.len() as u16,
-        Buffer: path.as_mut_ptr(),
+        Buffer: path.as_ptr() as *mut u16,
     })
 }
 
