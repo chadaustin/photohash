@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
+pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
@@ -47,13 +47,13 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metada
         }
     });
 
-    rx
+    Ok(rx)
 }
 
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
+pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
@@ -123,12 +123,12 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Meta
     drop(path_rx);
     drop(meta_tx);
 
-    meta_rx
+    Ok(meta_rx)
 }
 
 mod win;
 
-type ScanFn = fn(Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)>;
+type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>>;
 
 #[cfg(target_os = "linux")]
 fn prefer_serial_scan() -> bool {

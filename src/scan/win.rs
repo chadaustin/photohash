@@ -306,19 +306,19 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     })
 }
 
-pub fn windows_scan(paths: Vec<PathBuf>) -> mpmc::Receiver<(IMPath, Result<Metadata>)> {
+pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Metadata>)>> {
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
     for path in paths {
-        let handle = DirectoryHandle::open(path).unwrap();
+        let handle = DirectoryHandle::open(path)?;
 
         let mut entries = handle.entries();
         while let Some(info) = entries.next() {
-            let info = info.unwrap();
+            let info = info?;
             eprintln!("name: {}", info.os_str().to_string_lossy());
         }
     }
 
     _ = meta_tx;
-    meta_rx
+    Ok(meta_rx)
 }

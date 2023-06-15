@@ -199,7 +199,7 @@ impl Scan {
 
         let mut metadata_results = 0;
 
-        let rx = scan(vec![self.path.clone()]);
+        let rx = scan(vec![self.path.clone()])?;
         loop {
             let results = rx.recv_many(self.batch).await;
             if results.is_empty() {
