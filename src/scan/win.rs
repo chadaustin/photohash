@@ -48,8 +48,12 @@ use winapi::um::winnt::FILE_TRAVERSE;
 use winapi::um::winnt::HEAP_GENERATE_EXCEPTIONS;
 use winapi::um::winnt::SYNCHRONIZE;
 
-// TODO: This must be at least sizeof(FILE_DIRECTORY_INFORMATION) + 255 * 2
+use static_assertions::const_assert;
+
+// Ensure the buffer can always hold one max-length component.
+// Though prefer larger buffers for fewer syscalls.
 const BUFFER_SIZE: usize = 65536;
+const_assert!(BUFFER_SIZE >= std::mem::size_of::<FILE_DIRECTORY_INFORMATION>() + 255 * 2);
 
 unsafe fn walloc(size: usize) -> *mut u8 {
     HeapAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, size) as *mut u8
