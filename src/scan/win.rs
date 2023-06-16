@@ -1,6 +1,7 @@
+use crate::model::{FileInfo, IMPath};
 use crate::mpmc;
-use crate::model::{IMPath, FileInfo};
 use anyhow::Result;
+use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::ffi::OsString;
 use std::fs::Metadata;
@@ -12,6 +13,10 @@ use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
+use std::thread;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use ntapi::ntioapi::FileDirectoryInformation;
 use ntapi::ntioapi::NtCreateFile;
@@ -39,6 +44,7 @@ use winapi::shared::ntstatus::*;
 use winapi::um::heapapi::GetProcessHeap;
 use winapi::um::heapapi::HeapAlloc;
 use winapi::um::heapapi::HeapFree;
+use winapi::um::winnt::FILE_ATTRIBUTE_DIRECTORY;
 use winapi::um::winnt::FILE_ATTRIBUTE_NORMAL;
 use winapi::um::winnt::FILE_LIST_DIRECTORY;
 use winapi::um::winnt::FILE_SHARE_DELETE;
@@ -166,6 +172,17 @@ impl<'a> Entry<'a> {
     fn os_str(&self) -> OsString {
         OsString::from_wide(&self.name)
     }
+
+    fn is_dir(&self) -> bool {
+        self.attr & FILE_ATTRIBUTE_DIRECTORY == FILE_ATTRIBUTE_DIRECTORY
+    }
+
+    fn mtime(&self) -> SystemTime {
+        let windows_epoch = UNIX_EPOCH - Duration::from_secs(11644473600);
+        // TODO: handle negative mtime
+        // TODO: handle overflow
+        windows_epoch + Duration::from_nanos(self.mtime * 100)
+    }
 }
 
 pub struct Entries<'a> {
@@ -191,7 +208,6 @@ impl Entries<'_> {
         let next = match self.next {
             Some(next) => next,
             None => {
-                eprintln!("calling");
                 let mut io_status_block = MaybeUninit::zeroed();
                 let status: NTSTATUS = unsafe {
                     NtQueryDirectoryFile(
@@ -309,16 +325,67 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
 pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
-    for path in paths {
-        let handle = DirectoryHandle::open(path)?;
+    thread::Builder::new()
+        .name("winscan".to_string())
+        .spawn(move || {
+            // Depth first to minimize the maximum size of this queue
+            // to O(depth * single_dir_entries);
+            let mut queue = VecDeque::with_capacity(paths.len());
 
-        let mut entries = handle.entries();
-        while let Some(info) = entries.next() {
-            let info = info?;
-            eprintln!("name: {}", info.os_str().to_string_lossy());
-        }
-    }
+            for path in paths {
+                queue.push_back((None, path));
+            }
 
-    _ = meta_tx;
+            while let Some((handle, path)) = queue.pop_front() {
+                let handle = handle.unwrap_or_else(|| {
+                    // TODO: propagate error
+                    DirectoryHandle::open(&path).unwrap()
+                });
+
+                // TODO: double-buffer this allocation
+                let mut dirs_to_add = Vec::new();
+
+                let mut entries = handle.entries();
+                while let Some(e) = entries.next() {
+                    let e = e.unwrap();
+                    if e.name == [b'.' as u16] || e.name == [b'.' as u16, b'.' as u16] {
+                        continue;
+                    }
+
+                    // Construct a full child path. I hate that this
+                    // has two allocations. I haven't found a way to
+                    // bypass that.
+                    let child_full_path = Path::join(&path, OsString::from_wide(e.name));
+                    //eprintln!("child_full_path {}", child_full_path.display());
+
+                    if e.is_dir() {
+                        // TODO: handle errors
+                        let child = handle.open_child(e.name).unwrap();
+                        dirs_to_add.push((Some(child), child_full_path));
+                    } else {
+                        if let Some(utf8_full_path) = child_full_path.to_str() {
+                            meta_tx.send((
+                                utf8_full_path.to_string(),
+                                Ok(FileInfo {
+                                    // TODO: We do technically have
+                                    // the inode number if we call
+                                    // NtQueryDirectoryFileEx with
+                                    // FileIdBothDirectoryInformation.
+                                    inode: 0,
+                                    size: e.size,
+                                    mtime: e.mtime(),
+                                }),
+                            ));
+                        }
+                    }
+                }
+
+                while let Some(to_add) = dirs_to_add.pop() {
+                    queue.push_front(to_add);
+                }
+            }
+        })
+        .unwrap();
+
     Ok(meta_rx)
 }

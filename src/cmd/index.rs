@@ -160,13 +160,7 @@ pub fn do_index(
             let io_semaphore = io_semaphore.clone();
             let metadata_future = tokio::spawn({
                 let db = db.clone();
-                process_file(
-                    db,
-                    io_semaphore,
-                    path,
-                    metadata,
-                    db_metadata,
-                )
+                process_file(db, io_semaphore, path, metadata, db_metadata)
             });
 
             if let Err(_) = metadata_tx.send(metadata_future).await {

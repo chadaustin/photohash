@@ -1,4 +1,4 @@
-use crate::model::{IMPath, FileInfo};
+use crate::model::{FileInfo, IMPath};
 use crate::mpmc;
 use anyhow::Result;
 use std::fs::Metadata;
@@ -110,8 +110,9 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Resu
                     paths
                         .into_iter()
                         .map(|p| {
-                            let metadata =
-                                std::fs::symlink_metadata(&p).map(From::from).map_err(anyhow::Error::from);
+                            let metadata = std::fs::symlink_metadata(&p)
+                                .map(From::from)
+                                .map_err(anyhow::Error::from);
                             (p, metadata)
                         })
                         .collect::<Vec<_>>(),
@@ -151,11 +152,11 @@ fn prefer_serial_scan() -> bool {
 
 pub fn get_scan() -> ScanFn {
     win::windows_scan
-    /*
+        /*
         if prefer_serial_scan() {
             serial_scan
         } else {
             parallel_scan
         }
-    */
+*/
 }
