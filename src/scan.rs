@@ -127,20 +127,23 @@ pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Resu
     Ok(meta_rx)
 }
 
+#[cfg(windows)]
 mod win;
 
 type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
 
+#[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
-    if (cfg!(windows)) {
-        &[
-            ("walkdir", serial_scan),
-            ("jwalk", parallel_scan),
-            ("winscan", win::windows_scan),
-        ]
-    } else {
-        &[("walkdir", serial_scan), ("jwalk", parallel_scan)]
-    }
+    &[
+        ("walkdir", serial_scan),
+        ("jwalk", parallel_scan),
+        ("winscan", win::windows_scan),
+    ]
+}
+
+#[cfg(not(windows))]
+pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
+    &[("walkdir", serial_scan), ("jwalk", parallel_scan)]
 }
 
 #[cfg(windows)]
@@ -157,7 +160,11 @@ pub fn get_default_scan() -> ScanFn {
         Ok(contents) => contents.contains("Microsoft"),
         Err(_) => false,
     };
-    if prefer_serial { serial_scan } else { parallel_scan }
+    if prefer_serial {
+        serial_scan
+    } else {
+        parallel_scan
+    }
 }
 
 #[cfg(all(not(windows), not(target_os = "linux")))]
