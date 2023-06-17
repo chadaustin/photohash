@@ -41,6 +41,7 @@ anyhow = "*"
 async-std = { version = "*", features = ["unstable"] }
 blake3 = "*"
 blockhash = "*"
+chrono = "*"
 crossbeam = "*"
 crossbeam-channel = "*"
 directories = "*"

@@ -6,6 +6,8 @@ use crate::mpmc;
 use crate::scan;
 use anyhow::anyhow;
 use anyhow::Result;
+use chrono::DateTime;
+use chrono::Local;
 use futures::future::join_all;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -203,14 +205,18 @@ pub struct Scan {
 
 impl Scan {
     async fn run(&self) -> Result<()> {
-        let scan = self.scanner.as_ref().map(|name| {
-            for (n, s) in scan::get_all_scanners() {
-                if *n == name {
-                    return Ok(*s);
+        let scan = self
+            .scanner
+            .as_ref()
+            .map(|name| {
+                for (n, s) in scan::get_all_scanners() {
+                    if *n == name {
+                        return Ok(*s);
+                    }
                 }
-            }
-            Err(anyhow!("unknown scanner {}", name))
-        }).unwrap_or(Ok(scan::get_default_scan()))?;
+                Err(anyhow!("unknown scanner {}", name))
+            })
+            .unwrap_or(Ok(scan::get_default_scan()))?;
 
         let now = Instant::now();
 
@@ -292,7 +298,11 @@ impl Validate {
             }));
         }
 
-        let results: Vec<_> = join_all(results).await.into_iter().map(|f| f.unwrap()).collect::<Result<_>>()?;
+        let results: Vec<_> = join_all(results)
+            .await
+            .into_iter()
+            .map(|f| f.unwrap())
+            .collect::<Result<_>>()?;
 
         // path -> {scanner_name -> metadata}
         let mut path_to_scanner: HashMap<IMPath, HashMap<&'static str, FileInfo>> = HashMap::new();
@@ -310,8 +320,41 @@ impl Validate {
             for missing in &all_scanners - &scan_results.keys().collect() {
                 eprintln!("{} missing in {}", path, missing);
             }
+
+            let metadatas = scan_results.iter().collect::<Vec<_>>();
+            let a = metadatas[0];
+            for b in &metadatas[1..] {
+                Self::compare(&path, &a, &b);
+            }
         }
 
         Ok(())
+    }
+
+    fn compare(path: &IMPath, a: &(&&'static str, &FileInfo), b: &(&&'static str, &FileInfo)) {
+        let (a_scanner, a) = a;
+        let (b_scanner, b) = b;
+        if a.inode != b.inode {
+            eprintln!(
+                "{}: inodes differ: {}={}, {}={}",
+                path, a_scanner, a.inode, b_scanner, b.inode
+            );
+        }
+        if a.size != b.size {
+            eprintln!(
+                "{}: sizes differ: {}={}, {}={}",
+                path, a_scanner, a.size, b_scanner, b.size
+            );
+        }
+        if a.mtime != b.mtime {
+            eprintln!(
+                "{}: mtimes differ: {}={}, {}={}",
+                path,
+                a_scanner,
+                DateTime::<Local>::from(a.mtime),
+                b_scanner,
+                DateTime::<Local>::from(b.mtime)
+            );
+        }
     }
 }
