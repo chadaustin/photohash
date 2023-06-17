@@ -131,25 +131,6 @@ mod win;
 
 type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
 
-#[cfg(target_os = "linux")]
-fn prefer_serial_scan() -> bool {
-    match std::fs::read_to_string("/proc/version_signature") {
-        Ok(contents) => contents.contains("Microsoft"),
-        Err(_) => false,
-    }
-}
-
-#[cfg(windows)]
-fn prefer_serial_scan() -> bool {
-    // On both NTFS and over SMB, walkdir is 4-10x faster.
-    true
-}
-
-#[cfg(all(not(windows), not(target_os = "linux")))]
-fn prefer_serial_scan() -> bool {
-    true
-}
-
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
     if (cfg!(windows)) {
         &[
@@ -162,13 +143,27 @@ pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
     }
 }
 
+#[cfg(windows)]
 pub fn get_default_scan() -> ScanFn {
+    // On both NTFS and over SMB, walkdir is 4-10x faster than jwalk.
+    // But NtQueryDirectoryFile is faster still.
     win::windows_scan
-    /*
-            if prefer_serial_scan() {
-                serial_scan
-            } else {
-                parallel_scan
-            }
-    */
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_default_scan() -> ScanFn {
+    // jwalk is very slow on WSL1
+    let prefer_serial = match std::fs::read_to_string("/proc/version_signature") {
+        Ok(contents) => contents.contains("Microsoft"),
+        Err(_) => false,
+    };
+    if prefer_serial { serial_scan } else { parallel_scan }
+}
+
+#[cfg(all(not(windows), not(target_os = "linux")))]
+pub fn get_default_scan() -> ScanFn {
+    // Default to serial on platforms where we haven't measured jwalk
+    // as being faster.  It's possible jwalk would be faster on every
+    // unix, especially macOS, but we should check.
+    serial_scan
 }

@@ -324,14 +324,14 @@ impl Validate {
             let metadatas = scan_results.iter().collect::<Vec<_>>();
             let a = metadatas[0];
             for b in &metadatas[1..] {
-                Self::compare(&path, &a, &b);
+                Self::compare(&path, a, *b);
             }
         }
 
         Ok(())
     }
 
-    fn compare(path: &IMPath, a: &(&&'static str, &FileInfo), b: &(&&'static str, &FileInfo)) {
+    fn compare(path: &IMPath, a: (&&'static str, &FileInfo), b: (&&'static str, &FileInfo)) {
         let (a_scanner, a) = a;
         let (b_scanner, b) = b;
         if a.inode != b.inode {
