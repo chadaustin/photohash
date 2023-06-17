@@ -193,7 +193,7 @@ pub struct Scan {
 
 impl Scan {
     async fn run(&self) -> Result<()> {
-        let scan = scan::get_scan();
+        let scan = scan::get_default_scan();
 
         let now = Instant::now();
 

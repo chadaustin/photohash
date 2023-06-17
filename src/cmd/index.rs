@@ -129,7 +129,7 @@ pub fn do_index(
         })
         .collect::<Result<_, _>>()?;
 
-    let scanner = scan::get_scan();
+    let scanner = scan::get_default_scan();
     let path_meta_rx = scanner(dirs)?;
 
     let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);

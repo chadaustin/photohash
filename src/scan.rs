@@ -150,7 +150,22 @@ fn prefer_serial_scan() -> bool {
     true
 }
 
-pub fn get_scan() -> ScanFn {
+pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
+    if (cfg!(windows)) {
+        &[
+            ("walkdir", serial_scan),
+            ("jwalk", parallel_scan),
+            ("winscan", win::windows_scan),
+        ]
+    } else {
+        &[
+            ("walkdir", serial_scan),
+            ("jwalk", parallel_scan),
+        ]
+    }
+}
+
+pub fn get_default_scan() -> ScanFn {
     win::windows_scan
         /*
         if prefer_serial_scan() {
