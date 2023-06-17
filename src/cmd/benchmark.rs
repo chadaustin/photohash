@@ -1,8 +1,14 @@
 use crate::cmd::index;
 use crate::database::Database;
+use crate::model::FileInfo;
+use crate::model::IMPath;
 use crate::mpmc;
 use crate::scan;
+use anyhow::anyhow;
 use anyhow::Result;
+use futures::future::join_all;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -17,6 +23,7 @@ pub enum Benchmark {
     JwalkParStat(JwalkParStat),
     Scan(Scan),
     Index(Index),
+    Validate(Validate),
 }
 
 impl Benchmark {
@@ -27,6 +34,7 @@ impl Benchmark {
             Benchmark::JwalkParStat(cmd) => cmd.run().await,
             Benchmark::Scan(cmd) => cmd.run().await,
             Benchmark::Index(cmd) => cmd.run().await,
+            Benchmark::Validate(cmd) => cmd.run().await,
         }
     }
 }
@@ -189,11 +197,20 @@ pub struct Scan {
     path: PathBuf,
     #[structopt(long, default_value = "1")]
     batch: usize,
+    #[structopt(long)]
+    scanner: Option<String>,
 }
 
 impl Scan {
     async fn run(&self) -> Result<()> {
-        let scan = scan::get_default_scan();
+        let scan = self.scanner.as_ref().map(|name| {
+            for (n, s) in scan::get_all_scanners() {
+                if *n == name {
+                    return Ok(*s);
+                }
+            }
+            Err(anyhow!("unknown scanner {}", name))
+        }).unwrap_or(Ok(scan::get_default_scan()))?;
 
         let now = Instant::now();
 
@@ -246,6 +263,55 @@ impl Index {
 
         println!("index: {} ms", now.elapsed().as_millis());
         println!("file results: {}", pfr_results);
+        Ok(())
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub struct Validate {
+    #[structopt(parse(from_os_str))]
+    path: PathBuf,
+}
+
+impl Validate {
+    async fn run(&self) -> Result<()> {
+        let scanners = scan::get_all_scanners();
+        let mut results = Vec::with_capacity(scanners.len());
+        let mut all_scanners = HashSet::new();
+        for (scanner_name, scan) in scanners {
+            all_scanners.insert(scanner_name);
+            let path = self.path.clone();
+            results.push(tokio::spawn(async move {
+                let mut metadata = HashMap::new();
+                let rx = scan(vec![path])?;
+                while let Some((path, meta)) = rx.recv().await {
+                    //eprintln!("{}: {}", scanner_name, path);
+                    metadata.insert(path, meta);
+                }
+                Ok::<_, anyhow::Error>((*scanner_name, metadata))
+            }));
+        }
+
+        let results: Vec<_> = join_all(results).await.into_iter().map(|f| f.unwrap()).collect::<Result<_>>()?;
+
+        // path -> {scanner_name -> metadata}
+        let mut path_to_scanner: HashMap<IMPath, HashMap<&'static str, FileInfo>> = HashMap::new();
+
+        for (scanner_name, path_to_metadata) in results {
+            for (path, metadata) in path_to_metadata {
+                path_to_scanner
+                    .entry(path)
+                    .or_default()
+                    .insert(scanner_name, metadata?);
+            }
+        }
+
+        for (path, scan_results) in path_to_scanner {
+            for missing in &all_scanners - &scan_results.keys().collect() {
+                eprintln!("{} missing in {}", path, missing);
+            }
+        }
+
         Ok(())
     }
 }

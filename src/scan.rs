@@ -158,20 +158,17 @@ pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
             ("winscan", win::windows_scan),
         ]
     } else {
-        &[
-            ("walkdir", serial_scan),
-            ("jwalk", parallel_scan),
-        ]
+        &[("walkdir", serial_scan), ("jwalk", parallel_scan)]
     }
 }
 
 pub fn get_default_scan() -> ScanFn {
     win::windows_scan
-        /*
-        if prefer_serial_scan() {
-            serial_scan
-        } else {
-            parallel_scan
-        }
-*/
+    /*
+            if prefer_serial_scan() {
+                serial_scan
+            } else {
+                parallel_scan
+            }
+    */
 }
