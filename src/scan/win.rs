@@ -13,6 +13,9 @@ use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::mpsc::SendError;
+use std::sync::mpsc::SyncSender;
+use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -69,14 +72,47 @@ unsafe fn wfree(p: *mut u8) {
     _ = HeapFree(GetProcessHeap(), 0, p as PVOID);
 }
 
+struct HandleWrapper(HANDLE);
+unsafe impl Send for HandleWrapper {}
+
+static CLOSE_HANDLE: OnceLock<SyncSender<HandleWrapper>> = OnceLock::new();
+
+fn sync_close_handle(handle: HANDLE) {
+    // TODO: worth asserting if the return value isn't STATUS_SUCCESS?
+    _ = unsafe { NtClose(handle) };
+}
+
+// In my benchmarks against an SMB share, 10-15% of the scan time
+// is spent in NtClose. Push that into another thread.
+fn async_close_handle(handle: HANDLE) {
+    let tx = CLOSE_HANDLE.get_or_init(|| {
+        let (close_tx, close_rx) = std::sync::mpsc::sync_channel(1000);
+
+        thread::Builder::new()
+            .name("closehandle".to_string())
+            .spawn(move || {
+                while let Ok(HandleWrapper(handle)) = close_rx.recv() {
+                    sync_close_handle(handle);
+                }
+            })
+            .unwrap();
+
+        close_tx
+    });
+
+    match tx.send(HandleWrapper(handle)) {
+        Ok(()) => (),
+        Err(SendError(h)) => sync_close_handle(h.0),
+    }
+}
+
 pub struct DirectoryHandle {
     handle: HANDLE,
 }
 
 impl Drop for DirectoryHandle {
     fn drop(&mut self) {
-        // TODO: Worth asserting if return value isn't STATUS_SUCCESS?
-        let result = unsafe { NtClose(self.handle) };
+        async_close_handle(self.handle)
     }
 }
 
