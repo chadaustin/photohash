@@ -9,7 +9,7 @@ use std::vec::Vec;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "diff", about = "List files not in destination")]
+#[structopt(name = "diff", about = "List files missing in destination")]
 pub struct Diff {
     #[structopt(parse(from_os_str))]
     src: PathBuf,

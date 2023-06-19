@@ -313,19 +313,21 @@ impl Db {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "imagehash", about = "Index your files")]
 enum Opt {
-    Index(cmd::Index),
+    Benchmark(cmd::Benchmark),
     Db(Db),
     Diff(cmd::Diff),
-    Benchmark(cmd::Benchmark),
+    Index(cmd::Index),
+    Separate(cmd::Separate),
 }
 
 impl Opt {
     async fn run(&self) -> Result<()> {
         match self {
-            Opt::Index(cmd) => cmd.run().await,
+            Opt::Benchmark(cmd) => cmd.run().await,
             Opt::Db(cmd) => cmd.run().await,
             Opt::Diff(cmd) => cmd.run().await,
-            Opt::Benchmark(cmd) => cmd.run().await,
+            Opt::Index(cmd) => cmd.run().await,
+            Opt::Separate(cmd) => cmd.run().await,
         }
     }
 }
