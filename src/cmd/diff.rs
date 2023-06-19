@@ -13,7 +13,7 @@ use structopt::StructOpt;
 pub struct Diff {
     #[structopt(parse(from_os_str))]
     src: PathBuf,
-    #[structopt(parse(from_os_str))]
+    #[structopt(parse(from_os_str), required(true))]
     dests: Vec<PathBuf>,
 }
 

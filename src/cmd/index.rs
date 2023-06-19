@@ -26,7 +26,7 @@ const RESULT_CHANNEL_SIZE: usize = 8;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "index", about = "Scan directories and update the index")]
 pub struct Index {
-    #[structopt(parse(from_os_str))]
+    #[structopt(parse(from_os_str), required(true))]
     dirs: Vec<PathBuf>,
 }
 
