@@ -254,86 +254,8 @@ struct ProcessResult {
     // todo: information about whether either should be written to the database
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "path", about = "Print database location")]
-struct DbPath {}
-
-impl DbPath {
-    async fn run(&self) -> Result<()> {
-        println!("{}", database::get_database_path()?.display());
-        Ok(())
-    }
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "open", about = "Interactively explore database")]
-struct DbOpen {}
-
-impl DbOpen {
-    async fn run(&self) -> Result<()> {
-        let mut cmd = Command::new("sqlite3");
-        cmd.arg(database::get_database_path()?);
-        Self::exec(cmd)
-    }
-
-    #[cfg(unix)]
-    fn exec(mut cmd: Command) -> Result<()> {
-        Err(cmd.exec().into())
-    }
-
-    #[cfg(not(unix))]
-    fn exec(mut cmd: Command) -> Result<()> {
-        let status = cmd.status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(anyhow!("Failed to run sqlite3 command"))
-        }
-    }
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "db", about = "Database administration")]
-enum Db {
-    #[structopt(name = "path")]
-    DbPath(DbPath),
-    #[structopt(name = "open")]
-    DbOpen(DbOpen),
-}
-
-impl Db {
-    async fn run(&self) -> Result<()> {
-        match self {
-            Db::DbPath(cmd) => cmd.run().await,
-            Db::DbOpen(cmd) => cmd.run().await,
-        }
-    }
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "imagehash", about = "Index your files")]
-enum Opt {
-    Benchmark(cmd::Benchmark),
-    Db(Db),
-    Diff(cmd::Diff),
-    Index(cmd::Index),
-    Separate(cmd::Separate),
-}
-
-impl Opt {
-    async fn run(&self) -> Result<()> {
-        match self {
-            Opt::Benchmark(cmd) => cmd.run().await,
-            Opt::Db(cmd) => cmd.run().await,
-            Opt::Diff(cmd) => cmd.run().await,
-            Opt::Index(cmd) => cmd.run().await,
-            Opt::Separate(cmd) => cmd.run().await,
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = Opt::from_iter(wild::args_os());
+    let opt = crate::cmd::MainCommand::from_iter(wild::args_os());
     opt.run().await
 }
