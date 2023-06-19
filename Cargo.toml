@@ -3,7 +3,7 @@ name = "imagehash"
 version = "0.1.0"
 authors = ["Chad Austin <chad@chadaustin.me>"]
 edition = "2018"
-build = "src/build.rs"
+build = "build.rs"
 
 [lib]
 name = "imagehash"
