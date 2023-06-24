@@ -1,10 +1,9 @@
 // TODO: fix
-#![allow(dead_code)]
 #![allow(unused)]
 
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::unbounded;
-use futures::channel::oneshot::channel;
+use futures::channel::oneshot;
 use hex::ToHex;
 use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
 use std::cmp::min;
@@ -16,11 +15,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Instant;
 use std::time::SystemTime;
 use structopt::StructOpt;
 use tokio::io::AsyncReadExt;
-use tokio::sync::{mpsc, oneshot};
+use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
 mod cmd;
@@ -32,13 +32,42 @@ use imagehash::model::{Hash20, Hash32};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 
-const BUFFER_SIZE: usize = 65536;
+const READ_SIZE: usize = 65536;
+
+static IO_POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+const IO_POOL_CONCURRENCY: usize = 4;
+
+fn get_io_pool() -> &'static rayon::ThreadPool {
+    IO_POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(IO_POOL_CONCURRENCY)
+            .thread_name(|i| format!("io{i}"))
+            .build()
+            .unwrap()
+    })
+}
+
+async fn run_in_io_pool<F, T>(f: F) -> T
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let (tx, rx) = oneshot::channel();
+
+    get_io_pool().spawn(move || {
+        _ = tx.send(f());
+    });
+
+    rx.await.unwrap()
+}
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
-    tokio::task::spawn_blocking(move || {
+    /// This assumes that computing blake3 is much faster than IO and
+    /// will not unnecessarily content with other workers.
+    run_in_io_pool(move || {
         let mut hasher = blake3::Hasher::new();
         let mut file = std::fs::File::open(path)?;
-        let mut buffer = [0u8; BUFFER_SIZE];
+        let mut buffer = [0u8; READ_SIZE];
         loop {
             let n = file.read(&mut buffer)?;
             if n == 0 {
@@ -49,7 +78,6 @@ async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
         Ok(hasher.finalize().into())
     })
     .await
-    .unwrap()
 }
 
 struct HeifPerceptualImage<'a> {
