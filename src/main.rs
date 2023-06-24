@@ -61,6 +61,12 @@ where
     rx.await.unwrap()
 }
 
+async fn get_file_contents(path: PathBuf) -> Result<Vec<u8>> {
+    Ok(run_in_io_pool(move || {
+        std::fs::read(path)
+    }).await?)
+}
+
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
     /// This assumes that computing blake3 is much faster than IO and
     /// will not unnecessarily content with other workers.
