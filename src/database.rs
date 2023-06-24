@@ -302,7 +302,6 @@ fn i64_to_time(time: i64) -> SystemTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Error;
     use std::time::Duration;
     use std::time::SystemTime;
 

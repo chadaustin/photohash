@@ -236,11 +236,11 @@ mod tests {
         let spawner = pool.spawner();
         spawner.spawn(async move {
             assert_eq!(Some(()), rx.recv().await);
-        });
+        }).unwrap();
 
         spawner.spawn(async move {
             tx.send(()).unwrap();
-        });
+        }).unwrap();
 
         pool.run();
     }
@@ -253,11 +253,11 @@ mod tests {
         let spawner = pool.spawner();
         spawner.spawn(async move {
             assert_eq!(None as Option<()>, rx.recv().await);
-        });
+        }).unwrap();
 
         spawner.spawn(async move {
             drop(tx);
-        });
+        }).unwrap();
 
         pool.run();
     }
@@ -296,10 +296,10 @@ mod tests {
 
         spawner.spawn(async move {
             assert_eq!(Some(10), rx1.recv().await);
-        });
+        }).unwrap();
         spawner.spawn(async move {
             assert_eq!(Some(20), rx2.recv().await);
-        });
+        }).unwrap();
         tx.send_many([10, 20]).unwrap();
 
         pool.run()
@@ -315,13 +315,13 @@ mod tests {
 
         spawner.spawn(async move {
             assert_eq!(Some(10), rx1.recv().await);
-        });
+        }).unwrap();
         spawner.spawn(async move {
             assert_eq!(Some(20), rx2.recv().await);
-        });
+        }).unwrap();
         spawner.spawn(async move {
             tx.send_many([10, 20]).unwrap();
-        });
+        }).unwrap();
 
         pool.run()
     }
@@ -333,10 +333,10 @@ mod tests {
 
         let (tx, rx) = mpmc::unbounded();
 
-        tx.send_many([10, 20, 30]);
+        tx.send_many([10, 20, 30]).unwrap();
         spawner.spawn(async move {
             assert_eq!(vec![10, 20, 30], rx.recv_many(100).await);
-        });
+        }).unwrap();
 
         pool.run();
     }
@@ -348,11 +348,11 @@ mod tests {
 
         let (tx, rx) = mpmc::unbounded();
 
-        tx.send_many([10, 20, 30]);
+        tx.send_many([10, 20, 30]).unwrap();
         spawner.spawn(async move {
             assert_eq!(vec![10, 20], rx.recv_many(2).await);
             assert_eq!(vec![30], rx.recv_many(2).await);
-        });
+        }).unwrap();
 
         pool.run();
     }
@@ -367,7 +367,7 @@ mod tests {
 
         spawner.spawn(async move {
             assert_eq!(Vec::<()>::new(), rx.recv_many(2).await);
-        });
+        }).unwrap();
 
         pool.run();
     }
