@@ -3,6 +3,9 @@ use anyhow::Result;
 use std::process::Command;
 use structopt::StructOpt;
 
+#[cfg(not(windows))]
+use std::os::unix::process::CommandExt;
+
 use crate::database;
 
 #[derive(Debug, StructOpt)]

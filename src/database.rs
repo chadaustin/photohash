@@ -1,5 +1,3 @@
-#![feature(iter_array_chunks)]
-
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
