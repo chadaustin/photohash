@@ -1,4 +1,3 @@
-#![feature(iter_array_chunks)]
 // TODO: fix
 #![allow(dead_code)]
 #![allow(unused)]
@@ -25,7 +24,6 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 mod cmd;
-mod scan;
 
 pub use imagehash::database::Database;
 use imagehash::model::{ContentMetadata, FileInfo, ImageMetadata};

@@ -13,12 +13,12 @@ use tokio::task::JoinHandle;
 use crate::compute_blake3;
 use crate::heic_perceptual_hash;
 use crate::jpeg_perceptual_hash;
-use imagehash::model::IMPath;
-use imagehash::model::ImageMetadata;
-use crate::scan;
 use crate::ContentMetadata;
 use crate::Database;
 use crate::FileInfo;
+use imagehash::model::IMPath;
+use imagehash::model::ImageMetadata;
+use imagehash::scan;
 
 const PATH_CHANNEL_SIZE: usize = 8;
 const RESULT_CHANNEL_SIZE: usize = 8;

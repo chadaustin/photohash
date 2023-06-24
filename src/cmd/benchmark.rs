@@ -1,16 +1,16 @@
 #![allow(clippy::len_zero)]
 
 use crate::cmd::index;
-use imagehash::database::Database;
-use imagehash::model::FileInfo;
-use imagehash::model::IMPath;
-use crate::scan;
 use anyhow::anyhow;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Local;
 use futures::future::join_all;
+use imagehash::database::Database;
+use imagehash::model::FileInfo;
+use imagehash::model::IMPath;
 use imagehash::mpmc;
+use imagehash::scan;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;

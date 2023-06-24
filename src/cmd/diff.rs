@@ -1,7 +1,7 @@
 use crate::cmd::index;
-use imagehash::model::IMPath;
 use crate::Database;
 use anyhow::Result;
+use imagehash::model::IMPath;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
