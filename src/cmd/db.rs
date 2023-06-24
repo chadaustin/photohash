@@ -6,7 +6,7 @@ use structopt::StructOpt;
 #[cfg(not(windows))]
 use std::os::unix::process::CommandExt;
 
-use crate::database;
+use imagehash::database;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "path", about = "Print database location")]

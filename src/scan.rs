@@ -1,6 +1,6 @@
 #![allow(clippy::len_zero)]
 
-use crate::model::{FileInfo, IMPath};
+use imagehash::model::{FileInfo, IMPath};
 use anyhow::Result;
 use imagehash::mpmc;
 use std::fs::Metadata;

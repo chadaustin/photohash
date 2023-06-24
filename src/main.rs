@@ -25,13 +25,11 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 mod cmd;
-mod database;
-mod model;
 mod scan;
 
-use database::Database;
-use model::{ContentMetadata, FileInfo, ImageMetadata};
-use model::{Hash20, Hash32};
+pub use imagehash::database::Database;
+use imagehash::model::{ContentMetadata, FileInfo, ImageMetadata};
+use imagehash::model::{Hash20, Hash32};
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;

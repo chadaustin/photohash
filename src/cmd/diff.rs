@@ -1,5 +1,5 @@
 use crate::cmd::index;
-use crate::model::IMPath;
+use imagehash::model::IMPath;
 use crate::Database;
 use anyhow::Result;
 use std::collections::HashMap;

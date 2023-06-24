@@ -1,9 +1,9 @@
 #![allow(clippy::len_zero)]
 
 use crate::cmd::index;
-use crate::database::Database;
-use crate::model::FileInfo;
-use crate::model::IMPath;
+use imagehash::database::Database;
+use imagehash::model::FileInfo;
+use imagehash::model::IMPath;
 use crate::scan;
 use anyhow::anyhow;
 use anyhow::Result;
