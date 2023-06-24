@@ -43,18 +43,14 @@ impl Diff {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let difference = compute_difference(&db, self.src.clone(), self.dests.clone()).await?;
-
-        let mut first = true;
-        for path in difference {
-            if first {
-                first = false;
-                eprintln!("Files not in destination:");
-            }
-            println!("  {}", path);
+        if difference.is_empty() {
+            eprintln!("All files exist in destination");
+            return Ok(());
         }
 
-        if first {
-            eprintln!("All files exist in destination");
+        eprintln!("Files not in destination:");
+        for path in difference {
+            println!("  {}", path);
         }
 
         Ok(())
