@@ -58,6 +58,7 @@ sha-1 = "*"
 static_assertions = "*"
 structopt = "*"
 tokio = { version = "1", features = ["full"] }
+turbojpeg = "*"
 walkdir = "2"
 wild = "*"
 winapi = { version = "*", features = ["heapapi"] }

@@ -8,7 +8,6 @@ use crossbeam_channel::unbounded;
 use futures::channel::oneshot::channel;
 use hex::ToHex;
 use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
-use sha1::{Digest, Sha1};
 use std::cmp::min;
 use std::ffi::OsStr;
 use std::fmt;
@@ -39,20 +38,6 @@ use model::{Hash20, Hash32};
 use std::os::unix::process::CommandExt;
 
 const BUFFER_SIZE: usize = 65536;
-
-async fn sha1(path: &PathBuf) -> Result<Hash20> {
-    let mut hasher = Sha1::new();
-    let mut file = tokio::fs::File::open(path).await?;
-    let mut buffer = [0u8; BUFFER_SIZE];
-    loop {
-        let n = file.read(&mut buffer).await?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buffer[..n]);
-    }
-    Ok(hasher.finalize().into())
-}
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
     tokio::task::spawn_blocking(move || {
@@ -164,6 +149,7 @@ impl fmt::Display for CommandError {
 
 impl std::error::Error for CommandError {}
 
+/*
 fn hash_djpeg<T: Into<Stdio>>(stdin: T) -> Result<Hash20> {
     let output = Command::new("djpeg")
         .args(["-dct", "int", "-dither", "none", "-nosmooth", "-bmp"])
@@ -227,25 +213,6 @@ fn imagehash(path: &PathBuf) -> Result<Hash20> {
         },
     );
     Ok(min(min(h1?, h2?), min(h3?, h4?)))
-}
-
-enum PoolType {
-    Cpu,
-    Io,
-}
-
-/*
-fn get_hasher(path: &PathBuf) -> (PoolType, fn(&PathBuf) -> Result<Hash20>) {
-    let ext = path
-        .extension()
-        .and_then(&OsStr::to_str)
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or("".into());
-    if ext == "jpeg" || ext == "jpg" {
-        (PoolType::Cpu, imagehash)
-    } else {
-        (PoolType::Io, sha1)
-    }
 }
 */
 

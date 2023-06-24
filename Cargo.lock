@@ -402,6 +402,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.50"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31c789563b815f77f4250caee12365734369f942439b7defd71e18a48197130"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,6 +1047,7 @@ dependencies = [
  "static_assertions",
  "structopt",
  "tokio",
+ "turbojpeg",
  "vcpkg",
  "walkdir",
  "wild",
@@ -1964,6 +1974,29 @@ checksum = "e6522d49d03727ffb138ae4cbc1283d3774f0d10aa7f9bf52e6784c45daf9b23"
 dependencies = [
  "num-integer",
  "strength_reduce",
+]
+
+[[package]]
+name = "turbojpeg"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22d317e50cdcd80f9b5e9e23f931357973596fb0cdd469ef260d27dcb55dc779"
+dependencies = [
+ "libc",
+ "thiserror",
+ "turbojpeg-sys",
+]
+
+[[package]]
+name = "turbojpeg-sys"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1e9e755f0086dc42f4b285972b1f9fd136861b48dd4f3c0472cb5b71f5cb3e6"
+dependencies = [
+ "anyhow",
+ "cmake",
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]
