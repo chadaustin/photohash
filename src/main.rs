@@ -27,7 +27,6 @@ use tokio::task::JoinHandle;
 mod cmd;
 mod database;
 mod model;
-mod mpmc;
 mod scan;
 
 use database::Database;
