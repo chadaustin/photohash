@@ -113,13 +113,9 @@ impl Separate {
                 Mode::Move => "moving",
             };
             eprintln!("{verb} {} to {}", rel.display(), out_simplified.display());
-            match self.mode {
-                Mode::Link => {
-                    () = std::fs::hard_link(path, dest_path)?;
-                }
-                Mode::Move => {
-                    () = std::fs::rename(path, dest_path)?;
-                }
+            () = match self.mode {
+                Mode::Link => std::fs::hard_link(path, dest_path)?,
+                Mode::Move => std::fs::rename(path, dest_path)?,
             }
         }
 

@@ -1,3 +1,5 @@
+#![allow(clippy::len_zero)]
+
 use crate::cmd::index;
 use crate::database::Database;
 use crate::model::FileInfo;
@@ -98,9 +100,9 @@ impl Jwalk {
 
                 if self.stat {
                     _ = if self.bypath {
-                        std::fs::symlink_metadata(e.path())?;
+                        std::fs::symlink_metadata(e.path())?
                     } else {
-                        e.metadata()?;
+                        e.metadata()?
                     };
                     stat_calls += 1;
                 }

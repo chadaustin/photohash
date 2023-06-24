@@ -14,6 +14,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -88,15 +89,15 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
         if offset + 2 >= data.len() {
             eprintln!("out of bound access x={}, y={}", x, y);
         }
-        return blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]]);
+        blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]])
     }
 }
 
-fn jpeg_perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
+fn jpeg_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
     Err(anyhow!("JPEGs not supported"))
 }
 
-fn heic_perceptual_hash(path: &PathBuf) -> Result<ImageMetadata> {
+fn heic_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
     let libheif = libheif_rs::LibHeif::new();
 
     let file = File::open(path)?;
@@ -165,7 +166,7 @@ impl std::error::Error for CommandError {}
 
 fn hash_djpeg<T: Into<Stdio>>(stdin: T) -> Result<Hash20> {
     let output = Command::new("djpeg")
-        .args(&["-dct", "int", "-dither", "none", "-nosmooth", "-bmp"])
+        .args(["-dct", "int", "-dither", "none", "-nosmooth", "-bmp"])
         .stdin(stdin)
         .stderr(Stdio::inherit())
         .output()?;

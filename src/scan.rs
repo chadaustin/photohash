@@ -1,3 +1,5 @@
+#![allow(clippy::len_zero)]
+
 use crate::model::{FileInfo, IMPath};
 use crate::mpmc;
 use anyhow::Result;

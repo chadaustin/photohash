@@ -71,7 +71,7 @@ impl<T> Sender<T> {
             return Err(SendError(values));
         }
 
-        state.queue.extend(values.drain(..).into_iter());
+        state.queue.extend(values.drain(..));
         // TODO: How many do we actually need to wake up? One per added value?
         let wakers = std::mem::take(&mut state.rx_wakers);
         drop(state);

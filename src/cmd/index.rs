@@ -61,7 +61,7 @@ impl Index {
                     content_metadata.blake3.encode_hex::<String>(),
                     image_metadata
                         .as_ref()
-                        .map_or("none".into(), |im| hex::encode(&im.blockhash256)),
+                        .map_or("none".into(), |im| hex::encode(im.blockhash256)),
                 );
             }
             if let Some(im) = image_metadata {
@@ -245,7 +245,7 @@ async fn process_file(
     Ok(ProcessFileResult {
         path,
         blake3_computed,
-        content_metadata: content_metadata,
+        content_metadata,
         image_metadata,
     })
 }

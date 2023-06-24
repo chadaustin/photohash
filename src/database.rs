@@ -25,7 +25,7 @@ pub struct CachedStatements<'conn> {
 
 unsafe impl Send for CachedStatements<'_> {}
 
-fn cache_statements<'conn>(conn: &'conn Connection) -> CachedStatements<'conn> {
+fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
     CachedStatements {
         begin_tx: conn.prepare("BEGIN TRANSACTION").unwrap(),
         commit_tx: conn.prepare("COMMIT").unwrap(),
@@ -188,7 +188,7 @@ impl Database {
             let mut results = Vec::with_capacity(paths.len());
 
             let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<N>();
-            while let Some(chunk) = chunks.next() {
+            for chunk in chunks.by_ref() {
                 let i = results.len();
                 results.resize_with(results.len() + N, || None);
 
