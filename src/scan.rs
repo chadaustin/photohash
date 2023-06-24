@@ -3,8 +3,7 @@
 use crate::model::{FileInfo, IMPath};
 use crate::mpmc;
 use anyhow::Result;
-use std::fs::Metadata;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 

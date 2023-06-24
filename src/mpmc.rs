@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 
@@ -118,7 +117,7 @@ impl<'a, T> Unpin for Recv<'a, T> {}
 impl<'a, T> Future for Recv<'a, T> {
     type Output = Option<T>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.receiver.state.lock().unwrap();
         match state.queue.pop_front() {
             Some(value) => Poll::Ready(Some(value)),
@@ -145,9 +144,9 @@ impl<'a, T> Unpin for RecvMany<'a, T> {}
 impl<'a, T> Future for RecvMany<'a, T> {
     type Output = Vec<T>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.receiver.state.lock().unwrap();
-        let mut q = &mut state.queue;
+        let q = &mut state.queue;
         if q.is_empty() {
             if state.tx_count == 0 {
                 Poll::Ready(Vec::new())

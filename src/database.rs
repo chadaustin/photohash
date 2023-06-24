@@ -3,9 +3,6 @@ use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Statement;
 use self_cell::self_cell;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -56,6 +53,7 @@ impl Database {
         self.0.borrow_owner()
     }
 
+    #[allow(unused)]
     fn conn_mut(&mut self) -> &Connection {
         self.0.borrow_owner()
     }
@@ -168,7 +166,7 @@ impl Database {
     }
 
     pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
-        self.0.with_dependent_mut(|conn, stmt| {
+        self.0.with_dependent_mut(|_conn, stmt| {
             Ok(stmt
                 .get_file
                 .query_row((path,), Self::file_from_single_row)
@@ -183,7 +181,7 @@ impl Database {
     {
         const N: usize = 10;
 
-        self.with_transaction(|conn, stmt| {
+        self.with_transaction(|_conn, stmt| {
             let paths = paths.as_ref();
             let mut results = Vec::with_capacity(paths.len());
 
@@ -301,6 +299,7 @@ fn i64_to_time(time: i64) -> SystemTime {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use anyhow::Error;
