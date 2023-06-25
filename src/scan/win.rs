@@ -4,7 +4,6 @@ use anyhow::Result;
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::ffi::OsString;
-use std::fs::Metadata;
 use std::io;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
@@ -27,10 +26,9 @@ use ntapi::ntioapi::NtQueryDirectoryFile;
 use ntapi::ntioapi::FILE_DIRECTORY_FILE;
 use ntapi::ntioapi::FILE_DIRECTORY_INFORMATION;
 use ntapi::ntioapi::FILE_OPEN;
-use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_ALERT;
+//use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_ALERT;
 use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_NONALERT;
 use ntapi::ntobapi::NtClose;
-use ntapi::ntrtl::RtlInitUnicodeString;
 use std::os::windows::ffi::OsStrExt;
 use winapi::shared::ntdef::InitializeObjectAttributes;
 use winapi::shared::ntdef::FALSE;
@@ -39,8 +37,6 @@ use winapi::shared::ntdef::NTSTATUS;
 use winapi::shared::ntdef::OBJECT_ATTRIBUTES;
 use winapi::shared::ntdef::OBJ_CASE_INSENSITIVE;
 use winapi::shared::ntdef::OBJ_OPENIF;
-use winapi::shared::ntdef::POBJECT_ATTRIBUTES;
-use winapi::shared::ntdef::PUNICODE_STRING;
 use winapi::shared::ntdef::PVOID;
 use winapi::shared::ntdef::UNICODE_STRING;
 use winapi::shared::ntstatus::*;
@@ -118,7 +114,7 @@ impl Drop for DirectoryHandle {
 
 impl DirectoryHandle {
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<DirectoryHandle> {
-        let mut path = to_device_path(path)?;
+        let path = to_device_path(path)?;
 
         let mut unicode_string = unicode_string(&path)?;
 
@@ -400,7 +396,8 @@ pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Resul
                         dirs_to_add.push((Some(child), child_full_path));
                     } else {
                         if let Some(utf8_full_path) = child_full_path.to_str() {
-                            meta_tx.send((
+                            // TODO: return on Err?
+                            _ = meta_tx.send((
                                 utf8_full_path.to_string(),
                                 Ok(FileInfo {
                                     // TODO: We do technically have

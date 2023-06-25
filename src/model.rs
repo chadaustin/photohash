@@ -4,8 +4,6 @@ use std::time::SystemTime;
 
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
-#[cfg(windows)]
-use std::os::windows::fs::MetadataExt;
 
 pub type Hash20 = [u8; 20];
 pub type Hash32 = [u8; 32];
