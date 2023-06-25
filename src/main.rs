@@ -62,9 +62,7 @@ where
 }
 
 async fn get_file_contents(path: PathBuf) -> Result<Vec<u8>> {
-    Ok(run_in_io_pool(move || {
-        std::fs::read(path)
-    }).await?)
+    Ok(run_in_io_pool(move || std::fs::read(path)).await?)
 }
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
