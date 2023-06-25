@@ -1,6 +1,6 @@
 use anyhow::Result;
 use hex::ToHex;
-use imagehash::model::Hash32;
+use imagehash::model;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -23,12 +23,20 @@ impl Hash {
                 "  jpeg_rothash: {}",
                 hash_str(crate::jpeg_rothash(file.clone()).await)
             );
+            println!(
+                "  blockhash256: {}",
+                hash_str(
+                    crate::perceptual_hash(file.clone())
+                        .await
+                        .map(|e| e.blockhash256)
+                )
+            );
         }
         Ok(())
     }
 }
 
-fn hash_str(result: Result<Hash32>) -> String {
+fn hash_str<const N: usize>(result: Result<model::Hash<N>>) -> String {
     match result {
         Ok(h) => h.encode_hex(),
         Err(e) => e.to_string(),

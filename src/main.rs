@@ -1,7 +1,7 @@
 // TODO: fix
 #![allow(unused)]
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use crossbeam_channel::unbounded;
 use futures::channel::oneshot;
 use hex::ToHex;
@@ -156,21 +156,18 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-fn jpeg_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
+async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
     Err(anyhow!("JPEGs not supported"))
 }
 
-fn heic_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
+async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
     let libheif = libheif_rs::LibHeif::new();
 
-    let file = File::open(path)?;
-    let size = file.metadata()?.len();
+    let file_contents = get_file_contents(path).await?;
+
     // libheif_rs does not allow customizing its multithreading behavior, and
     // allocates new threads per decoded image.
-    // TODO: replace with libheif_sys and call heif_context_set_max_decoding_threads(0).
-    let reader = libheif_rs::StreamReader::new(file, size);
-
-    let mut ctx = HeifContext::read_from_reader(Box::new(reader))?;
+    let mut ctx = HeifContext::read_from_bytes(&file_contents)?;
     ctx.set_max_decoding_threads(0);
     let handle = ctx.primary_image_handle()?;
     //eprintln!("width and height: {} x {}", handle.width(), handle.height());
@@ -216,10 +213,17 @@ fn heic_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
     })
 }
 
-struct ProcessResult {
-    content_metadata: ContentMetadata,
-    image_metadata: ImageMetadata,
-    // todo: information about whether either should be written to the database
+async fn perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
+    let Some(ext) = path.extension() else {
+        bail!("not a photo");
+    };
+    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+        jpeg_perceptual_hash(path).await
+    } else if ext.eq_ignore_ascii_case("heic") {
+        heic_perceptual_hash(path).await
+    } else {
+        bail!("not a photo");
+    }
 }
 
 #[tokio::main]
