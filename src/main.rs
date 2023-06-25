@@ -135,6 +135,37 @@ pub async fn jpeg_rothash(path: PathBuf) -> Result<Hash32> {
     Ok(min(min(rot0?, rot90?), min(rot180?, rot270?)))
 }
 
+struct JpegPerceptualImage<'a> {
+    image: &'a turbojpeg::Image<Vec<u8>>,
+}
+
+impl blockhash::Image for JpegPerceptualImage<'_> {
+    type Pixel = blockhash::Rgb<u8>;
+
+    fn dimensions(&self) -> (u32, u32) {
+        (self.image.width as u32, self.image.height as u32)
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+        let offset = self.image.pitch * y as usize + 3 * x as usize;
+        let data = &self.image.pixels;
+        blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]])
+    }
+}
+
+async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
+    let file_contents = get_file_contents(path).await?;
+    let image = turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)?;
+
+    let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
+
+    Ok(ImageMetadata {
+        image_width: image.width as u32,
+        image_height: image.height as u32,
+        blockhash256: phash.into(),
+    })
+}
+
 struct HeifPerceptualImage<'a> {
     plane: &'a libheif_rs::Plane<&'a [u8]>,
 }
@@ -154,10 +185,6 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
         }
         blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]])
     }
-}
-
-async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
-    Err(anyhow!("JPEGs not supported"))
 }
 
 async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
