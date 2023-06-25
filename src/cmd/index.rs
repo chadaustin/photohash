@@ -55,13 +55,10 @@ impl Index {
             let image_metadata = process_file_result.image_metadata;
             if process_file_result.blake3_computed {
                 println!(
-                    "{}: size = {}, blake3 = {}, blockhash = {}",
-                    process_file_result.path,
-                    content_metadata.file_info.size,
+                    "{} {:>8}K {}",
                     content_metadata.blake3.encode_hex::<String>(),
-                    image_metadata
-                        .as_ref()
-                        .map_or("none".into(), |im| hex::encode(im.blockhash256)),
+                    content_metadata.file_info.size / 1024,
+                    dunce::simplified(process_file_result.path.as_ref()).display(),
                 );
             }
             if let Some(im) = image_metadata {
