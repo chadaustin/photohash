@@ -84,6 +84,57 @@ async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
     .await
 }
 
+pub async fn jpeg_rothash(path: PathBuf) -> Result<Hash32> {
+    // jpeg_data outlives the async operation below: how do we tell the borrow checker?
+    let jpeg_data = Arc::new(get_file_contents(path).await?);
+    let jd0 = jpeg_data.clone();
+    let jd90 = jpeg_data.clone();
+    let jd180 = jpeg_data.clone();
+    let jd270 = jpeg_data;
+
+    let (rot0, rot90, rot180, rot270) = tokio::try_join!(
+        tokio::spawn(async move {
+            let image = turbojpeg::decompress(&jd0, turbojpeg::PixelFormat::RGB)?;
+            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+        }),
+        tokio::spawn(async move {
+            let jpeg_data = turbojpeg::transform(
+                &turbojpeg::Transform {
+                    op: turbojpeg::TransformOp::Rot90,
+                    ..Default::default()
+                },
+                &jd90,
+            )?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+        }),
+        tokio::spawn(async move {
+            let jpeg_data = turbojpeg::transform(
+                &turbojpeg::Transform {
+                    op: turbojpeg::TransformOp::Rot180,
+                    ..Default::default()
+                },
+                &jd180,
+            )?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+        }),
+        tokio::spawn(async move {
+            let jpeg_data = turbojpeg::transform(
+                &turbojpeg::Transform {
+                    op: turbojpeg::TransformOp::Rot270,
+                    ..Default::default()
+                },
+                &jd270,
+            )?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+        }),
+    )?;
+
+    Ok(min(min(rot0?, rot90?), min(rot180?, rot270?)))
+}
+
 struct HeifPerceptualImage<'a> {
     plane: &'a libheif_rs::Plane<&'a [u8]>,
 }
@@ -164,84 +215,6 @@ fn heic_perceptual_hash(path: &Path) -> Result<ImageMetadata> {
         blockhash256: phash.into(),
     })
 }
-
-#[derive(Debug, Clone)]
-struct CommandError(String);
-
-impl fmt::Display for CommandError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "error executing command {}", self.0)
-    }
-}
-
-impl std::error::Error for CommandError {}
-
-/*
-fn hash_djpeg<T: Into<Stdio>>(stdin: T) -> Result<Hash20> {
-    let output = Command::new("djpeg")
-        .args(["-dct", "int", "-dither", "none", "-nosmooth", "-bmp"])
-        .stdin(stdin)
-        .stderr(Stdio::inherit())
-        .output()?;
-
-    if !output.status.success() {
-        return Err(CommandError("failed to run djpeg".to_string()).into());
-    }
-
-    let mut hasher = Sha1::new();
-    hasher.update(&output.stdout);
-    Ok(hasher.finalize().into())
-}
-
-fn hash_jpegtran<T: Into<Stdio>>(stdin: T, args: &[&str]) -> Result<Hash20> {
-    let mut child = Command::new("jpegtran")
-        .args(args)
-        .stdin(stdin)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
-
-    let stdout = child.stdout.take().unwrap();
-    let result = hash_djpeg(stdout);
-
-    let status = child.wait().expect("child wasn't running");
-    if !status.success() {
-        return Err(CommandError("failed to run jpegtran".to_string()).into());
-    }
-
-    result
-}
-
-fn imagehash(path: &PathBuf) -> Result<Hash20> {
-    let ((h1, h2), (h3, h4)) = rayon::join(
-        || {
-            rayon::join(
-                || -> Result<Hash20> {
-                    let file = File::open(path)?;
-                    hash_djpeg(file)
-                },
-                || -> Result<Hash20> {
-                    let file = File::open(path)?;
-                    hash_jpegtran(file, &["-rotate", "90"])
-                },
-            )
-        },
-        || {
-            rayon::join(
-                || -> Result<Hash20> {
-                    let file = File::open(path)?;
-                    hash_jpegtran(file, &["-rotate", "180"])
-                },
-                || -> Result<Hash20> {
-                    let file = File::open(path)?;
-                    hash_jpegtran(file, &["-rotate", "270"])
-                },
-            )
-        },
-    );
-    Ok(min(min(h1?, h2?), min(h3?, h4?)))
-}
-*/
 
 struct ProcessResult {
     content_metadata: ContentMetadata,
