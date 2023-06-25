@@ -29,7 +29,7 @@ pub enum MainCommand {
 }
 
 impl MainCommand {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(self) -> Result<()> {
         match self {
             MainCommand::Benchmark(cmd) => cmd.run().await,
             MainCommand::Db(cmd) => cmd.run().await,

@@ -54,25 +54,11 @@ impl FromStr for Mode {
 }
 
 impl Separate {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(mut self) -> Result<()> {
         // We need to canonicalize to correctly strip_prefix later.
-        let dests: Vec<PathBuf> = self
-            .dests
-            .iter()
-            .map(|p| p.canonicalize())
-            .collect::<std::io::Result<Vec<PathBuf>>>()?;
+        self.src = self.src.canonicalize()?;
+        self.dests = self.dests.iter().map(|p| p.canonicalize()).collect::<std::io::Result<Vec<PathBuf>>>()?;
 
-        Separate {
-            out: self.out.clone(),
-            src: self.src.canonicalize()?,
-            dests,
-            mode: self.mode,
-        }
-        .do_run()
-        .await
-    }
-
-    async fn do_run(&self) -> Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
         let out_simplified = dunce::simplified(&self.out);
 
