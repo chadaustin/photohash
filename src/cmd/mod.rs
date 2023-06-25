@@ -6,12 +6,14 @@ use structopt::StructOpt;
 mod benchmark;
 mod db;
 mod diff;
+mod hash;
 mod index;
 mod separate;
 
 pub use benchmark::Benchmark;
 pub use db::Db;
 pub use diff::Diff;
+pub use hash::Hash;
 pub use index::Index;
 pub use separate::Separate;
 
@@ -21,6 +23,7 @@ pub enum MainCommand {
     Benchmark(Benchmark),
     Db(Db),
     Diff(Diff),
+    Hash(Hash),
     Index(Index),
     Separate(Separate),
 }
@@ -31,6 +34,7 @@ impl MainCommand {
             MainCommand::Benchmark(cmd) => cmd.run().await,
             MainCommand::Db(cmd) => cmd.run().await,
             MainCommand::Diff(cmd) => cmd.run().await,
+            MainCommand::Hash(cmd) => cmd.run().await,
             MainCommand::Index(cmd) => cmd.run().await,
             MainCommand::Separate(cmd) => cmd.run().await,
         }
