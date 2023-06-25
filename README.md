@@ -3,7 +3,7 @@
 ## Ubuntu
 
 ```
-sudo apt install -y nasm
+sudo apt install -y cmake nasm
 
 sudo add-apt-repository ppa:strukturag/libheif
 sudo add-apt-repository ppa:strukturag/libde265
