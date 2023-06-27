@@ -47,7 +47,8 @@ directories = "*"
 dunce = "*"
 futures = "*"
 hex = "*"
-#img_hash = "*"
+image = { version = "*", features = [] }
+image_hasher = "*"
 jwalk = "*"
 ntapi = "*"
 libheif-rs = "*"
@@ -56,7 +57,7 @@ self_cell = "*"
 static_assertions = "*"
 structopt = "*"
 tokio = { version = "1", features = ["full"] }
-turbojpeg = "*"
+turbojpeg = { version = "*", features = ["image"] }
 walkdir = "2"
 wild = "*"
 winapi = { version = "*", features = ["heapapi"] }

@@ -5,8 +5,12 @@ use anyhow::{anyhow, bail, Context, Result};
 use crossbeam_channel::unbounded;
 use futures::channel::oneshot;
 use hex::ToHex;
+use image::buffer::ConvertBuffer;
+use image::ImageBuffer;
+use image_hasher::HashAlg;
 use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
 use std::cmp::min;
+use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs::File;
@@ -155,15 +159,28 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
 
 async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
     let file_contents = get_file_contents(path).await?;
-    let image = turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)?;
+    let image: image::RgbImage = turbojpeg::decompress_image(&file_contents)?;
 
-    let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
-
+    let hasher = image_hasher::HasherConfig::new()
+        .hash_alg(HashAlg::Blockhash)
+        .hash_size(16, 16)
+        .to_hasher();
+    let h = hasher.hash_image(&image);
     Ok(ImageMetadata {
-        image_width: image.width as u32,
-        image_height: image.height as u32,
-        blockhash256: phash.into(),
+        image_width: image.width(),
+        image_height: image.height(),
+        blockhash256: h.as_bytes().try_into()?,
     })
+    /*
+
+        let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
+
+        Ok(ImageMetadata {
+            image_width: image.width as u32,
+            image_height: image.height as u32,
+            blockhash256: phash.into(),
+        })
+    */
 }
 
 struct HeifPerceptualImage<'a> {
@@ -227,16 +244,32 @@ async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
 
     // perceptual hash
 
-    let phash = blockhash::blockhash256(&HeifPerceptualImage {
-        plane: &interleaved_plane,
-    });
+    let plane = interleaved_plane;
+    assert_eq!(plane.stride, 3 * plane.width as usize);
+
+    let new_image: ImageBuffer<image::Rgb<u8>, Vec<u8>> =
+        ImageBuffer::<image::Rgb<u8>, &[u8]>::from_raw(plane.width, plane.height, plane.data)
+            .unwrap()
+            .convert();
+
+    let hasher = image_hasher::HasherConfig::new()
+        .hash_alg(HashAlg::Blockhash)
+        .hash_size(16, 16)
+        .to_hasher();
+    let h = hasher.hash_image(&new_image);
+
+    /*
+        let phash = blockhash::blockhash256(&HeifPerceptualImage {
+            plane: &interleaved_plane,
+        });
+    */
 
     //eprintln!("perceptual hash done");
 
     Ok(ImageMetadata {
         image_width: handle.width(),
         image_height: handle.height(),
-        blockhash256: phash.into(),
+        blockhash256: h.as_bytes().try_into()?,
     })
 }
 
