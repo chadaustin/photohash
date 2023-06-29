@@ -42,6 +42,8 @@ const READ_SIZE: usize = 65536;
 static IO_POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
 const IO_POOL_CONCURRENCY: usize = 4;
 
+const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
+
 fn get_io_pool() -> &'static rayon::ThreadPool {
     IO_POOL.get_or_init(|| {
         rayon::ThreadPoolBuilder::new()
@@ -185,30 +187,43 @@ async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
         }
     }
 
-    let image: image::RgbImage = if transform != TransformOp::None {
-        let jpeg_data = turbojpeg::transform(
-            &turbojpeg::Transform {
-                op: transform,
-                ..Default::default()
-            },
-            &file_contents,
-        )?;
-        turbojpeg::decompress_image(&jpeg_data)?
-    } else {
-        turbojpeg::decompress_image(&file_contents)?
-    };
+    if USE_IMAGE_HASHER_BLOCKHASH {
+        let image: image::RgbImage = if transform != TransformOp::None {
+            let jpeg_data = turbojpeg::transform(
+                &turbojpeg::Transform {
+                    op: transform,
+                    ..Default::default()
+                },
+                &file_contents,
+            )?;
+            turbojpeg::decompress_image(&jpeg_data)?
+        } else {
+            turbojpeg::decompress_image(&file_contents)?
+        };
 
-    let hasher = image_hasher::HasherConfig::new()
-        .hash_alg(HashAlg::Blockhash)
-        .hash_size(16, 16)
-        .to_hasher();
-    let h = hasher.hash_image(&image);
-    Ok(ImageMetadata {
-        image_width: image.width(),
-        image_height: image.height(),
-        blockhash256: h.as_bytes().try_into()?,
-    })
-    /*
+        let hasher = image_hasher::HasherConfig::new()
+            .hash_alg(HashAlg::Blockhash)
+            .hash_size(16, 16)
+            .to_hasher();
+        let h = hasher.hash_image(&image);
+        Ok(ImageMetadata {
+            image_width: image.width(),
+            image_height: image.height(),
+            blockhash256: h.as_bytes().try_into()?,
+        })
+    } else {
+        let image = if transform != TransformOp::None {
+            let jpeg_data = turbojpeg::transform(
+                &turbojpeg::Transform {
+                    op: transform,
+                    ..Default::default()
+                },
+                &file_contents,
+            )?;
+            turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?
+        } else {
+            turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)?
+        };
 
         let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
 
@@ -217,7 +232,7 @@ async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
             image_height: image.height as u32,
             blockhash256: phash.into(),
         })
-    */
+    }
 }
 
 struct HeifPerceptualImage<'a> {
@@ -281,33 +296,37 @@ async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
 
     // perceptual hash
 
-    let plane = interleaved_plane;
-    assert_eq!(plane.stride, 3 * plane.width as usize);
+    if USE_IMAGE_HASHER_BLOCKHASH {
+        let plane = interleaved_plane;
+        assert_eq!(plane.stride, 3 * plane.width as usize);
 
-    let new_image: ImageBuffer<image::Rgb<u8>, Vec<u8>> =
-        ImageBuffer::<image::Rgb<u8>, &[u8]>::from_raw(plane.width, plane.height, plane.data)
-            .unwrap()
-            .convert();
+        let new_image: ImageBuffer<image::Rgb<u8>, Vec<u8>> =
+            ImageBuffer::<image::Rgb<u8>, &[u8]>::from_raw(plane.width, plane.height, plane.data)
+                .unwrap()
+                .convert();
 
-    let hasher = image_hasher::HasherConfig::new()
-        .hash_alg(HashAlg::Blockhash)
-        .hash_size(16, 16)
-        .to_hasher();
-    let h = hasher.hash_image(&new_image);
+        let hasher = image_hasher::HasherConfig::new()
+            .hash_alg(HashAlg::Blockhash)
+            .hash_size(16, 16)
+            .to_hasher();
+        let h = hasher.hash_image(&new_image);
 
-    /*
+        Ok(ImageMetadata {
+            image_width: handle.width(),
+            image_height: handle.height(),
+            blockhash256: h.as_bytes().try_into()?,
+        })
+    } else {
         let phash = blockhash::blockhash256(&HeifPerceptualImage {
             plane: &interleaved_plane,
         });
-    */
 
-    //eprintln!("perceptual hash done");
-
-    Ok(ImageMetadata {
-        image_width: handle.width(),
-        image_height: handle.height(),
-        blockhash256: h.as_bytes().try_into()?,
-    })
+        Ok(ImageMetadata {
+            image_width: handle.width(),
+            image_height: handle.height(),
+            blockhash256: phash.into(),
+        })
+    }
 }
 
 async fn perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
