@@ -173,7 +173,8 @@ impl JwalkParStat {
                             .into_iter()
                             .map(std::fs::symlink_metadata)
                             .collect::<Vec<_>>(),
-                    );
+                    )
+                    .unwrap();
                 }
             });
         }
@@ -230,7 +231,7 @@ impl Scan {
             if results.is_empty() {
                 break;
             }
-            for (path, metadata_result) in results {
+            for (_path, metadata_result) in results {
                 let _ = metadata_result?;
                 metadata_results += 1;
             }

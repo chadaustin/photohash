@@ -42,7 +42,6 @@ async-std = { version = "*", features = ["unstable"] }
 blake3 = "*"
 blockhash = "*"
 chrono = "*"
-crossbeam-channel = "*"
 directories = "*"
 dunce = "*"
 kamadak-exif = "*"

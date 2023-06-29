@@ -1,38 +1,23 @@
-// TODO: fix
-#![allow(unused)]
-
-use anyhow::{anyhow, bail, Context, Result};
-use crossbeam_channel::unbounded;
+use anyhow::{bail, Result};
 use futures::channel::oneshot;
-use hex::ToHex;
 use image::buffer::ConvertBuffer;
 use image::ImageBuffer;
 use image_hasher::HashAlg;
-use libheif_rs::{Channel, ColorSpace, HeifContext, ItemId, RgbChroma};
+use libheif_rs::{ColorSpace, HeifContext, ItemId, RgbChroma};
 use std::cmp::min;
 use std::convert::TryInto;
-use std::ffi::OsStr;
-use std::fmt;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::Path;
+use std::io::Read;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::Instant;
-use std::time::SystemTime;
 use structopt::StructOpt;
-use tokio::io::AsyncReadExt;
-use tokio::runtime::Runtime;
-use tokio::task::JoinHandle;
 use turbojpeg::TransformOp;
 
 mod cmd;
 
 pub use imagehash::database::Database;
+use imagehash::model::Hash32;
 use imagehash::model::{ContentMetadata, FileInfo, ImageMetadata};
-use imagehash::model::{Hash20, Hash32};
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -73,8 +58,8 @@ async fn get_file_contents(path: PathBuf) -> Result<Vec<u8>> {
 }
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
-    /// This assumes that computing blake3 is much faster than IO and
-    /// will not unnecessarily content with other workers.
+    // This assumes that computing blake3 is much faster than IO and
+    // will not unnecessarily content with other workers.
     run_in_io_pool(move || {
         let mut hasher = blake3::Hasher::new();
         let mut file = std::fs::File::open(path)?;
@@ -161,7 +146,7 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
 }
 
 async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
-    let mut file_contents = get_file_contents(path).await?;
+    let file_contents = get_file_contents(path).await?;
 
     let mut reader = file_contents.as_slice();
     let exif_segment = exif::get_exif_attr_from_jpeg(&mut reader)?;
@@ -272,7 +257,10 @@ async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
     let mut meta_ids: Vec<ItemId> = vec![0; 1];
     let count = handle.metadata_block_ids(&mut meta_ids, b"Exif");
     assert_eq!(count, 1);
+    /*
     let exif: Vec<u8> = handle.metadata(meta_ids[0])?;
+    _ = exif;
+     */
 
     //eprintln!("exif done");
 

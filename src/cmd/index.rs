@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use hex::ToHex;
-use std::future::Future;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -11,8 +10,6 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::compute_blake3;
-use crate::heic_perceptual_hash;
-use crate::jpeg_perceptual_hash;
 use crate::ContentMetadata;
 use crate::Database;
 use crate::FileInfo;
@@ -20,7 +17,6 @@ use imagehash::model::IMPath;
 use imagehash::model::ImageMetadata;
 use imagehash::scan;
 
-const PATH_CHANNEL_SIZE: usize = 8;
 const RESULT_CHANNEL_SIZE: usize = 8;
 
 #[derive(Debug, StructOpt)]
@@ -129,7 +125,7 @@ pub fn do_index(
     let scanner = scan::get_default_scan();
     let path_meta_rx = scanner(dirs)?;
 
-    let (metadata_tx, mut metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
+    let (metadata_tx, metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
 
     // Reads enumerated paths and computes necessary file metadata and content hashes.
     let db = db.clone();
@@ -194,7 +190,7 @@ async fn process_file(
                 record.blake3
             } else {
                 blake3_computed = true;
-                let permit = io_semaphore.acquire().await.unwrap();
+                let _permit = io_semaphore.acquire().await.unwrap();
                 // TODO: use into_ok() when it's stabilized
                 compute_blake3(PathBuf::from_str(&path).unwrap()).await?
             }
@@ -203,7 +199,7 @@ async fn process_file(
             // No record of this file - blake3 must be computed.
             //eprintln!("computing blake3 of {}", path.display());
             blake3_computed = true;
-            let permit = io_semaphore.acquire().await.unwrap();
+            let _permit = io_semaphore.acquire().await.unwrap();
             // TODO: use into_ok() when it's stabilized
             compute_blake3(PathBuf::from_str(&path).unwrap()).await?
         }
@@ -220,7 +216,7 @@ async fn process_file(
             .add_files(&[(&path, &content_metadata)])?;
     }
 
-    let mut image_metadata = None;
+    let image_metadata = None;
 
     /*
         // TODO: is this an image?
