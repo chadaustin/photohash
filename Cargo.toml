@@ -45,6 +45,7 @@ chrono = "*"
 crossbeam-channel = "*"
 directories = "*"
 dunce = "*"
+kamadak-exif = "*"
 futures = "*"
 hex = "*"
 image = { version = "*", features = [] }

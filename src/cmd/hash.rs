@@ -31,6 +31,7 @@ impl Hash {
                         .map(|e| e.blockhash256)
                 )
             );
+            println!();
         }
         Ok(())
     }

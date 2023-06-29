@@ -26,6 +26,7 @@ use structopt::StructOpt;
 use tokio::io::AsyncReadExt;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
+use turbojpeg::TransformOp;
 
 mod cmd;
 
@@ -158,8 +159,44 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
 }
 
 async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
-    let file_contents = get_file_contents(path).await?;
-    let image: image::RgbImage = turbojpeg::decompress_image(&file_contents)?;
+    let mut file_contents = get_file_contents(path).await?;
+
+    let mut reader = file_contents.as_slice();
+    let exif_segment = exif::get_exif_attr_from_jpeg(&mut reader)?;
+    let (fields, _little_endian) = exif::parse_exif(&exif_segment)?;
+
+    let mut transform = TransformOp::None;
+    for field in fields {
+        if let (exif::Tag::Orientation, exif::Value::Short(v)) = (field.tag, &field.value) {
+            let Some(v) = v.first() else {
+                continue;
+            };
+            transform = match v {
+                1 => TransformOp::None,
+                2 => TransformOp::Hflip,
+                3 => TransformOp::Rot180,
+                4 => TransformOp::Vflip,
+                5 => TransformOp::Transpose,
+                6 => TransformOp::Rot90,
+                7 => TransformOp::Transverse,
+                8 => TransformOp::Rot270,
+                _ => TransformOp::None,
+            };
+        }
+    }
+
+    let image: image::RgbImage = if transform != TransformOp::None {
+        let jpeg_data = turbojpeg::transform(
+            &turbojpeg::Transform {
+                op: transform,
+                ..Default::default()
+            },
+            &file_contents,
+        )?;
+        turbojpeg::decompress_image(&jpeg_data)?
+    } else {
+        turbojpeg::decompress_image(&file_contents)?
+    };
 
     let hasher = image_hasher::HasherConfig::new()
         .hash_alg(HashAlg::Blockhash)
