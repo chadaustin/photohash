@@ -19,9 +19,6 @@ pub use imagehash::database::Database;
 use imagehash::model::Hash32;
 use imagehash::model::{ContentMetadata, FileInfo, ImageMetadata};
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
-
 const READ_SIZE: usize = 65536;
 
 static IO_POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();

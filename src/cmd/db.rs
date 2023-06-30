@@ -1,7 +1,9 @@
-use anyhow::anyhow;
 use anyhow::Result;
 use std::process::Command;
 use structopt::StructOpt;
+
+#[cfg(not(unix))]
+use anyhow::anyhow;
 
 #[cfg(not(windows))]
 use std::os::unix::process::CommandExt;
