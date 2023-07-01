@@ -30,8 +30,7 @@ impl DbOpen {
     async fn run(&self) -> Result<()> {
         let mut cmd = Command::new("sqlite3");
         cmd.arg(database::get_database_path()?);
-        Self::exec(cmd).context("failed to run sqlite3"
-        )
+        Self::exec(cmd).context("failed to run sqlite3")
     }
 
     #[cfg(unix)]

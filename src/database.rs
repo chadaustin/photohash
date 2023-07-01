@@ -12,6 +12,34 @@ use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 
+const GET_FILE: &str = "\
+SELECT inode, size, mtime, blake3 FROM files WHERE path = ?
+";
+
+const GET_FILES_10: &str = "\
+SELECT inode, size, mtime, blake3, path FROM files
+WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+";
+
+const CREATE_TABLE_FILES: &str = "\
+CREATE TABLE IF NOT EXISTS files (
+    path TEXT PRIMARY KEY,
+    inode INT NOT NULL,
+    size INT NOT NULL,
+    mtime INT NOT NULL,
+    blake3 BLOB NOT NULL
+) WITHOUT ROWID
+";
+
+const CREATE_TABLE_IMAGES: &str = "\
+CREATE TABLE IF NOT EXISTS images (
+    blake3 BLOB PRIMARY KEY,
+    width INT NOT NULL,
+    height INT NOT NULL,
+    blockhash256 BLOB NOT NULL
+) WITHOUT ROWID
+";
+
 pub struct CachedStatements<'conn> {
     begin_tx: Statement<'conn>,
     commit_tx: Statement<'conn>,
@@ -28,12 +56,8 @@ fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
         commit_tx: conn.prepare("COMMIT").unwrap(),
         rollback_tx: conn.prepare("ROLLBACK").unwrap(),
         // TODO: We could elide `path` from the singular case because we already know it.
-        get_file: conn
-            .prepare("SELECT inode, size, mtime, blake3 FROM files WHERE path = ?")
-            .unwrap(),
-        get_files_10: conn
-            .prepare("SELECT inode, size, mtime, blake3, path FROM files WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .unwrap(),
+        get_file: conn.prepare(GET_FILE).unwrap(),
+        get_files_10: conn.prepare(GET_FILES_10).unwrap(),
     }
 }
 
@@ -85,28 +109,11 @@ impl Database {
     fn init_schema(conn: Connection) -> Result<Self> {
         // TODO: on newer SQLite, use STRICT
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS files (
-                path TEXT PRIMARY KEY,
-                inode INT NOT NULL,
-                size INT NOT NULL,
-                mtime INT NOT NULL,
-                blake3 BLOB NOT NULL
-            ) WITHOUT ROWID",
-            (),
-        )
-        .context("failed to create `files` table")?;
+        conn.execute(CREATE_TABLE_FILES, ())
+            .context("failed to create `files` table")?;
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS images (
-                blake3 BLOB PRIMARY KEY,
-                width INT NOT NULL,
-                height INT NOT NULL,
-                blockhash256 BLOB NOT NULL
-            ) WITHOUT ROWID",
-            (),
-        )
-        .context("failed to create `images` table")?;
+        conn.execute(CREATE_TABLE_IMAGES, ())
+            .context("failed to create `images` table")?;
 
         Ok(Database(DatabaseInner::new(conn, cache_statements)))
     }
