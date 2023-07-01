@@ -248,8 +248,8 @@ impl Database {
         )?;
         query.execute((
             &blake3,
-            &image_metadata.image_width,
-            &image_metadata.image_height,
+            &image_metadata.dimensions.0,
+            &image_metadata.dimensions.1,
             &image_metadata.blockhash256,
         ))?;
         Ok(())
@@ -262,8 +262,7 @@ impl Database {
         Ok(query
             .query_row((&blake3,), |row| {
                 Ok(ImageMetadata {
-                    image_width: row.get(0)?,
-                    image_height: row.get(1)?,
+                    dimensions: (row.get(0)?, row.get(1)?),
                     blockhash256: row.get(2)?,
                 })
             })

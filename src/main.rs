@@ -189,8 +189,7 @@ async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
             .to_hasher();
         let h = hasher.hash_image(&image);
         Ok(ImageMetadata {
-            image_width: image.width(),
-            image_height: image.height(),
+            dimensions: (image.width(), image.height()),
             blockhash256: h.as_bytes().try_into()?,
         })
     } else {
@@ -210,8 +209,7 @@ async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
         let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
 
         Ok(ImageMetadata {
-            image_width: image.width as u32,
-            image_height: image.height as u32,
+            dimensions: (image.width as u32, image.height as u32),
             blockhash256: phash.into(),
         })
     }
@@ -297,8 +295,7 @@ async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
         let h = hasher.hash_image(&new_image);
 
         Ok(ImageMetadata {
-            image_width: handle.width(),
-            image_height: handle.height(),
+            dimensions: (handle.width(), handle.height()),
             blockhash256: h.as_bytes().try_into()?,
         })
     } else {
@@ -307,8 +304,7 @@ async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
         });
 
         Ok(ImageMetadata {
-            image_width: handle.width(),
-            image_height: handle.height(),
+            dimensions: (handle.width(), handle.height()),
             blockhash256: phash.into(),
         })
     }

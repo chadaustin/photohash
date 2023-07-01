@@ -52,16 +52,25 @@ impl FakeInode for std::fs::Metadata {
 
 #[derive(Debug, PartialEq)]
 pub struct ContentMetadata {
+    /// Platform independent subset of `std::fs::Metadata` used to
+    /// decide whether to recompute blake3.
     pub file_info: FileInfo,
 
-    // Content attributes
-    // MD5? SHA-1?
+    /// Primary content hash used to deduplicate image metadata.
     pub blake3: Hash32,
 }
 
+/// Secondary image metadata used for fast duplicate detection,
+/// including rotation-independent and perceptual hashes.
 #[derive(Debug, PartialEq)]
 pub struct ImageMetadata {
-    pub image_width: u32,
-    pub image_height: u32,
+    /// If we're hashing the pixels, we might as well store the
+    /// dimensions. These are the parsed pixel dimensions independent
+    /// of EXIF.
+    pub dimensions: (u32, u32),
+
+    /// 256-bit blockhash as computed by the `blockhash` crate.
+    /// image_hasher (img_hash) also provides a blockhash
+    /// implementation, but it's very slow.
     pub blockhash256: Hash32,
 }
