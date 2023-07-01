@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Statement;
+use rusqlite_migration::{Migrations, M};
 use self_cell::self_cell;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -34,9 +35,20 @@ CREATE TABLE IF NOT EXISTS files (
 const CREATE_TABLE_IMAGES: &str = "\
 CREATE TABLE IF NOT EXISTS images (
     blake3 BLOB PRIMARY KEY,
-    width INT NOT NULL,
-    height INT NOT NULL,
-    blockhash256 BLOB NOT NULL
+    width INT,
+    height INT,
+    blockhash256 BLOB
+) WITHOUT ROWID
+";
+
+const RECREATE_TABLE_IMAGES: &str = "\
+DROP TABLE images;
+CREATE TABLE images (
+    blake3 BLOB PRIMARY KEY,
+    width INT,
+    height INT,
+    blockhash256 BLOB,
+    jpegrothash BLOB
 ) WITHOUT ROWID
 ";
 
@@ -87,7 +99,6 @@ impl Database {
     pub fn open() -> Result<Self> {
         let database_path = get_database_path()?;
 
-        //eprintln!("opening database at {}", database_path.display());
         if let Some(parent) = database_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -102,11 +113,10 @@ impl Database {
 
     pub fn open_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
-
         Self::init_schema(conn)
     }
 
-    fn init_schema(conn: Connection) -> Result<Self> {
+    fn init_schema(mut conn: Connection) -> Result<Self> {
         // TODO: on newer SQLite, use STRICT
 
         conn.execute(CREATE_TABLE_FILES, ())
@@ -114,6 +124,13 @@ impl Database {
 
         conn.execute(CREATE_TABLE_IMAGES, ())
             .context("failed to create `images` table")?;
+
+        let migrations = Migrations::new(vec![
+            // The first version is reserved for the legacy schema.
+            M::up(""),
+            M::up(RECREATE_TABLE_IMAGES),
+        ]);
+        migrations.to_latest(&mut conn)?;
 
         Ok(Database(DatabaseInner::new(conn, cache_statements)))
     }

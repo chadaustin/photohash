@@ -1070,6 +1070,7 @@ dependencies = [
  "ntapi",
  "rayon",
  "rusqlite",
+ "rusqlite_migration",
  "self_cell",
  "static_assertions",
  "structopt",
@@ -1660,6 +1661,16 @@ dependencies = [
  "hashlink",
  "libsqlite3-sys",
  "smallvec",
+]
+
+[[package]]
+name = "rusqlite_migration"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef7dd29a4426624704d5966416682fb7ab3682f724986e9e3893eaca44accabc"
+dependencies = [
+ "log",
+ "rusqlite",
 ]
 
 [[package]]
