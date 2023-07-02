@@ -155,6 +155,7 @@ async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
             let Some(v) = v.first() else {
                 continue;
             };
+            // http://sylvana.net/jpegcrop/exif_orientation.html
             transform = match v {
                 1 => TransformOp::None,
                 2 => TransformOp::Hflip,
