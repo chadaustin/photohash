@@ -67,10 +67,13 @@ pub struct ImageMetadata {
     /// If we're hashing the pixels, we might as well store the
     /// dimensions. These are the parsed pixel dimensions independent
     /// of EXIF.
-    pub dimensions: (u32, u32),
+    pub dimensions: Option<(u32, u32)>,
 
     /// 256-bit blockhash as computed by the `blockhash` crate.
     /// image_hasher (img_hash) also provides a blockhash
     /// implementation, but it's very slow.
-    pub blockhash256: Hash32,
+    pub blockhash256: Option<Hash32>,
+
+    /// 256-bit blake3 hash of rotation-independent pixel data.
+    pub jpegrothash: Option<Hash32>,
 }

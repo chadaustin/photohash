@@ -28,7 +28,7 @@ impl Hash {
                 hash_str(
                     crate::perceptual_hash(file.clone())
                         .await
-                        .map(|e| e.blockhash256)
+                        .map(|e| e.blockhash256.unwrap())
                 )
             );
             println!();

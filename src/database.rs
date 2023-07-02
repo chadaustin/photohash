@@ -13,15 +13,6 @@ use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 
-const GET_FILE: &str = "\
-SELECT inode, size, mtime, blake3 FROM files WHERE path = ?
-";
-
-const GET_FILES_10: &str = "\
-SELECT inode, size, mtime, blake3, path FROM files
-WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-";
-
 const CREATE_TABLE_FILES: &str = "\
 CREATE TABLE IF NOT EXISTS files (
     path TEXT PRIMARY KEY,
@@ -52,12 +43,31 @@ CREATE TABLE images (
 ) WITHOUT ROWID
 ";
 
+const GET_FILE: &str = "\
+SELECT inode, size, mtime, blake3
+FROM files
+WHERE path = ?
+";
+
+const GET_FILES_10: &str = "\
+SELECT inode, size, mtime, blake3, path
+FROM files
+WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+";
+
+const GET_IMAGE: &str = "\
+SELECT width, height, blockhash256, jpegrothash
+FROM images
+WHERE blake3 = ?
+";
+
 pub struct CachedStatements<'conn> {
     begin_tx: Statement<'conn>,
     commit_tx: Statement<'conn>,
     rollback_tx: Statement<'conn>,
     get_file: Statement<'conn>,
     get_files_10: Statement<'conn>,
+    get_image: Statement<'conn>,
 }
 
 unsafe impl Send for CachedStatements<'_> {}
@@ -70,6 +80,7 @@ fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
         // TODO: We could elide `path` from the singular case because we already know it.
         get_file: conn.prepare(GET_FILE).unwrap(),
         get_files_10: conn.prepare(GET_FILES_10).unwrap(),
+        get_image: conn.prepare(GET_IMAGE).unwrap(),
     }
 }
 
@@ -141,6 +152,7 @@ impl Database {
         Ok(())
     }
 
+    /// For benchmarking.
     pub fn cached_immediate_transaction(&self) -> Result<()> {
         let _ = self
             .conn()
@@ -150,6 +162,7 @@ impl Database {
         Ok(())
     }
 
+    /// For benchmarking.
     pub fn cached_deferred_transaction(&self) -> Result<()> {
         let _ = self
             .conn()
@@ -178,17 +191,6 @@ impl Database {
         })
     }
 
-    fn file_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
-        Ok(ContentMetadata {
-            file_info: FileInfo {
-                inode: row.get(0)?,
-                size: row.get(1)?,
-                mtime: i64_to_time(row.get(2)?),
-            },
-            blake3: row.get(3)?,
-        })
-    }
-
     pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
         self.0.with_dependent_mut(|_conn, stmt| {
             Ok(stmt
@@ -198,9 +200,8 @@ impl Database {
         })
     }
 
-    pub fn get_files<PS, P>(&mut self, paths: PS) -> Result<Vec<Option<ContentMetadata>>>
+    pub fn get_files<P>(&mut self, paths: &[P]) -> Result<Vec<Option<ContentMetadata>>>
     where
-        PS: AsRef<[P]>,
         P: AsRef<str> + Copy,
     {
         const N: usize = 10;
@@ -260,6 +261,26 @@ impl Database {
         Ok(())
     }
 
+    fn file_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
+        Ok(ContentMetadata {
+            file_info: FileInfo {
+                inode: row.get(0)?,
+                size: row.get(1)?,
+                mtime: i64_to_time(row.get(2)?),
+            },
+            blake3: row.get(3)?,
+        })
+    }
+
+    pub fn get_image_metadata(&mut self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
+        self.0.with_dependent_mut(|_conn, stmt| {
+            Ok(stmt
+                .get_image
+                .query_row((blake3,), Self::image_from_single_row)
+                .optional()?)
+        })
+    }
+
     pub fn add_image_metadata(
         &self,
         blake3: &Hash32,
@@ -267,30 +288,27 @@ impl Database {
     ) -> Result<()> {
         let mut query = self.conn().prepare_cached(
             "INSERT OR REPLACE INTO images
-            (blake3, width, height, blockhash256)
-            VALUES (?, ?, ?, ?)",
+            (blake3, width, height, blockhash256, jpegrothash)
+            VALUES (?, ?, ?, ?, ?)",
         )?;
         query.execute((
             &blake3,
-            &image_metadata.dimensions.0,
-            &image_metadata.dimensions.1,
+            &image_metadata.dimensions.map(|d| d.0),
+            &image_metadata.dimensions.map(|d| d.1),
             &image_metadata.blockhash256,
+            &image_metadata.jpegrothash,
         ))?;
         Ok(())
     }
 
-    pub fn get_image_metadata(&self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
-        let mut query = self
-            .conn()
-            .prepare("SELECT width, height, blockhash256 FROM images WHERE blake3 = ?")?;
-        Ok(query
-            .query_row((&blake3,), |row| {
-                Ok(ImageMetadata {
-                    dimensions: (row.get(0)?, row.get(1)?),
-                    blockhash256: row.get(2)?,
-                })
-            })
-            .optional()?)
+    fn image_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ImageMetadata> {
+        let width: Option<u32> = row.get(0)?;
+        let height: Option<u32> = row.get(1)?;
+        Ok(ImageMetadata {
+            dimensions: width.and_then(|w| height.map(|h| (w, h))),
+            blockhash256: row.get(2)?,
+            jpegrothash: row.get(3)?,
+        })
     }
 }
 
@@ -343,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn in_memory_database() -> Result<()> {
+    fn in_memory_database_file_info() -> Result<()> {
         let mut db = Database::open_memory()?;
 
         let path = String::from("test");
@@ -362,6 +380,35 @@ mod tests {
 
         let result = db.get_file(&path)?.unwrap();
         assert_eq!(10, result.file_info.inode);
+
+        Ok(())
+    }
+
+    #[test]
+    fn record_and_retrieve_image_metadata() -> Result<()> {
+        let mut db = Database::open_memory()?;
+        let blake3 = Hash32::default();
+
+        assert_eq!(None, db.get_image_metadata(&blake3)?);
+
+        let empty_im = ImageMetadata {
+            dimensions: None,
+            blockhash256: None,
+            jpegrothash: None,
+        };
+
+        db.add_image_metadata(&blake3, &empty_im)?;
+        assert_eq!(Some(empty_im), db.get_image_metadata(&blake3)?);
+
+        let full_im = ImageMetadata {
+            dimensions: Some((10, 20)),
+            blockhash256: Some([0u8; 32]),
+            jpegrothash: Some([0u8; 32]),
+        };
+
+        // Test overwriting too.
+        db.add_image_metadata(&blake3, &full_im)?;
+        assert_eq!(Some(full_im), db.get_image_metadata(&blake3)?);
 
         Ok(())
     }
