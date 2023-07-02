@@ -55,6 +55,12 @@ FROM files
 WHERE path IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ";
 
+const ADD_FILE: &str = "\
+INSERT OR REPLACE INTO files
+(path, inode, size, mtime, blake3)
+VALUES (?, ?, ?, ?, ?)
+";
+
 const GET_IMAGE: &str = "\
 SELECT width, height, blockhash256, jpegrothash
 FROM images
@@ -73,6 +79,7 @@ pub struct CachedStatements<'conn> {
     rollback_tx: Statement<'conn>,
     get_file: Statement<'conn>,
     get_files_10: Statement<'conn>,
+    add_file: Statement<'conn>,
     get_image: Statement<'conn>,
     add_image: Statement<'conn>,
 }
@@ -87,6 +94,7 @@ fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
         // TODO: We could elide `path` from the singular case because we already know it.
         get_file: conn.prepare(GET_FILE).unwrap(),
         get_files_10: conn.prepare(GET_FILES_10).unwrap(),
+        add_file: conn.prepare(ADD_FILE).unwrap(),
         get_image: conn.prepare(GET_IMAGE).unwrap(),
         add_image: conn.prepare(ADD_IMAGE).unwrap(),
     }
@@ -258,22 +266,20 @@ impl Database {
         })
     }
 
-    pub fn add_files(&self, files: &[(&str, &ContentMetadata)]) -> Result<()> {
-        let mut query = self.conn().prepare_cached(
-            "INSERT OR REPLACE INTO files
-            (path, inode, size, mtime, blake3)
-            VALUES (?, ?, ?, ?, ?)",
-        )?;
-        for (path, file) in files {
-            query.execute((
-                path,
-                &file.file_info.inode,
-                &file.file_info.size,
-                time_to_i64(&file.file_info.mtime),
-                &file.blake3,
-            ))?;
-        }
-        Ok(())
+    pub fn add_files(&mut self, files: &[(&str, &ContentMetadata)]) -> Result<()> {
+        // TODO: optimize bulk insertions
+        self.with_transaction(|_conn, stmt| {
+            for (path, file) in files {
+                stmt.add_file.execute((
+                    path,
+                    &file.file_info.inode,
+                    &file.file_info.size,
+                    time_to_i64(&file.file_info.mtime),
+                    &file.blake3,
+                ))?;
+            }
+            Ok(())
+        })
     }
 
     fn file_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ContentMetadata> {
