@@ -61,6 +61,12 @@ FROM images
 WHERE blake3 = ?
 ";
 
+const ADD_IMAGE: &str = "\
+INSERT OR REPLACE INTO images
+(blake3, width, height, blockhash256, jpegrothash)
+VALUES (?, ?, ?, ?, ?)
+";
+
 pub struct CachedStatements<'conn> {
     begin_tx: Statement<'conn>,
     commit_tx: Statement<'conn>,
@@ -68,6 +74,7 @@ pub struct CachedStatements<'conn> {
     get_file: Statement<'conn>,
     get_files_10: Statement<'conn>,
     get_image: Statement<'conn>,
+    add_image: Statement<'conn>,
 }
 
 unsafe impl Send for CachedStatements<'_> {}
@@ -81,6 +88,7 @@ fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
         get_file: conn.prepare(GET_FILE).unwrap(),
         get_files_10: conn.prepare(GET_FILES_10).unwrap(),
         get_image: conn.prepare(GET_IMAGE).unwrap(),
+        add_image: conn.prepare(ADD_IMAGE).unwrap(),
     }
 }
 
@@ -191,8 +199,15 @@ impl Database {
         })
     }
 
+    pub fn with_statement<T, F>(&mut self, f: F) -> Result<T>
+    where
+        F: FnOnce(&mut CachedStatements) -> Result<T>,
+    {
+        self.0.with_dependent_mut(|_conn, stmt| f(stmt))
+    }
+
     pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
-        self.0.with_dependent_mut(|_conn, stmt| {
+        self.with_statement(|stmt| {
             Ok(stmt
                 .get_file
                 .query_row((path,), Self::file_from_single_row)
@@ -273,7 +288,7 @@ impl Database {
     }
 
     pub fn get_image_metadata(&mut self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
-        self.0.with_dependent_mut(|_conn, stmt| {
+        self.with_statement(|stmt| {
             Ok(stmt
                 .get_image
                 .query_row((blake3,), Self::image_from_single_row)
@@ -282,23 +297,20 @@ impl Database {
     }
 
     pub fn add_image_metadata(
-        &self,
+        &mut self,
         blake3: &Hash32,
         image_metadata: &ImageMetadata,
     ) -> Result<()> {
-        let mut query = self.conn().prepare_cached(
-            "INSERT OR REPLACE INTO images
-            (blake3, width, height, blockhash256, jpegrothash)
-            VALUES (?, ?, ?, ?, ?)",
-        )?;
-        query.execute((
-            &blake3,
-            &image_metadata.dimensions.map(|d| d.0),
-            &image_metadata.dimensions.map(|d| d.1),
-            &image_metadata.blockhash256,
-            &image_metadata.jpegrothash,
-        ))?;
-        Ok(())
+        self.with_statement(|stmt| {
+            stmt.add_image.execute((
+                &blake3,
+                &image_metadata.dimensions.map(|d| d.0),
+                &image_metadata.dimensions.map(|d| d.1),
+                &image_metadata.blockhash256,
+                &image_metadata.jpegrothash,
+            ))?;
+            Ok(())
+        })
     }
 
     fn image_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ImageMetadata> {
