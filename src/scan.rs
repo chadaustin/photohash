@@ -1,6 +1,7 @@
 #![allow(clippy::len_zero)]
 
-use crate::model::{FileInfo, IMPath};
+use crate::model::FileInfo;
+use crate::model::IMPath;
 use crate::mpmc;
 use anyhow::Result;
 use std::path::PathBuf;

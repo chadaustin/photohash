@@ -1,5 +1,6 @@
 use crate::compute_blake3;
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use hex::ToHex;
 use imagehash::model::ContentMetadata;
 use imagehash::model::FileInfo;

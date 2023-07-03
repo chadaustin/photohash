@@ -1,8 +1,11 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
 struct State<T> {
     queue: VecDeque<T>,

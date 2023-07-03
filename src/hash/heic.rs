@@ -4,7 +4,12 @@ use anyhow::Result;
 use image::buffer::ConvertBuffer;
 use image::ImageBuffer;
 use image_hasher::HashAlg;
-use libheif_rs::{ColorSpace, HeifContext, ItemId, LibHeif, Plane, RgbChroma};
+use libheif_rs::ColorSpace;
+use libheif_rs::HeifContext;
+use libheif_rs::ItemId;
+use libheif_rs::LibHeif;
+use libheif_rs::Plane;
+use libheif_rs::RgbChroma;
 use std::convert::TryInto;
 use std::path::Path;
 
