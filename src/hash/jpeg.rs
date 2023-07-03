@@ -29,7 +29,7 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
     }
 }
 
-pub async fn perceptual_hash(path: &Path) -> Result<ImageMetadata> {
+pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
     let file_contents = Arc::new(iopool::get_file_contents(path.to_owned()).await?);
 
     let fc = file_contents.clone();

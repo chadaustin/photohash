@@ -1,4 +1,4 @@
-use crate::hash::perceptual_hashes;
+use crate::hash::compute_image_hashes;
 use hex::ToHex;
 use imagehash::model;
 use std::fmt::Display;
@@ -20,7 +20,7 @@ impl Hash {
                 "  blake3:       {}",
                 hash_str(crate::compute_blake3(file.clone()).await.map(Some))
             );
-            let h = perceptual_hashes(file).await;
+            let h = compute_image_hashes(file).await;
             println!(
                 "  jpeg_rothash: {}",
                 hash_str(h.as_ref().map(|h| h.jpegrothash))

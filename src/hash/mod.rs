@@ -22,11 +22,11 @@ pub fn is_heic(path: &Path) -> bool {
     has_any_extension(path, HEIC_EXTENSIONS)
 }
 
-pub async fn perceptual_hashes(path: &Path) -> Result<ImageMetadata> {
+pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
     if is_jpeg(path) {
-        jpeg::perceptual_hash(path).await
+        jpeg::compute_image_hashes(path).await
     } else if is_heic(path) {
-        heic::perceptual_hash(path).await
+        heic::compute_image_hashes(path).await
     } else {
         bail!("not a photo");
     }

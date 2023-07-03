@@ -31,7 +31,7 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-pub async fn perceptual_hash(path: &Path) -> Result<ImageMetadata> {
+pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
     let libheif = LibHeif::new();
 
     let file_contents = iopool::get_file_contents(path.to_owned()).await?;
