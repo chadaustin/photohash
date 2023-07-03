@@ -230,7 +230,6 @@ impl Database {
         const N: usize = 10;
 
         self.with_transaction(|_conn, stmt| {
-            let paths = paths.as_ref();
             let mut results = Vec::with_capacity(paths.len());
 
             let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<N>();

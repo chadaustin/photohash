@@ -1,6 +1,7 @@
-use anyhow::Result;
+use crate::hash::perceptual_hashes;
 use hex::ToHex;
 use imagehash::model;
+use std::fmt::Display;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -12,24 +13,21 @@ pub struct Hash {
 }
 
 impl Hash {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         for file in &self.files {
             println!("{}", file.display());
             println!(
                 "  blake3:       {}",
-                hash_str(crate::compute_blake3(file.clone()).await)
+                hash_str(crate::compute_blake3(file.clone()).await.map(Some))
             );
+            let h = perceptual_hashes(file).await;
             println!(
                 "  jpeg_rothash: {}",
-                hash_str(crate::jpeg_rothash(file.clone()).await)
+                hash_str(h.as_ref().map(|h| h.jpegrothash))
             );
             println!(
                 "  blockhash256: {}",
-                hash_str(
-                    crate::perceptual_hash(file.clone())
-                        .await
-                        .map(|e| e.blockhash256.unwrap())
-                )
+                hash_str(h.as_ref().map(|h| h.blockhash256))
             );
             println!();
         }
@@ -37,9 +35,10 @@ impl Hash {
     }
 }
 
-fn hash_str<const N: usize>(result: Result<model::Hash<N>>) -> String {
+fn hash_str<const N: usize, E: Display>(result: Result<Option<model::Hash<N>>, E>) -> String {
     match result {
-        Ok(h) => h.encode_hex(),
+        Ok(Some(h)) => h.encode_hex(),
+        Ok(None) => "missing".to_string(),
         Err(e) => e.to_string(),
     }
 }
