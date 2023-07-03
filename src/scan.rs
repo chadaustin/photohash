@@ -124,19 +124,29 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
         let tx = path_tx.clone();
         rayon::spawn(move || {
             let mut cb = Vec::with_capacity(PARALLEL_CHANNEL_BATCH);
+            // No same_file_system option. https://github.com/Byron/jwalk/issues/27
             for entry in jwalk::WalkDir::new(&path)
                 .skip_hidden(false)
                 .sort(false)
+                .follow_links(false)
                 .parallelism(jwalk::Parallelism::RayonDefaultPool {
                     busy_timeout: std::time::Duration::from_secs(300),
                 })
             {
                 let e = match entry {
                     Ok(e) => e,
-                    // TODO: propagate error? At least propagate that we failed to traverse a directory.
-                    // It would be unfortunate to delete records because a scan temporarily failed.
                     Err(e) => {
-                        eprintln!("error from jwalk entry: {}", e);
+                        // If we have a path, propagate the error.
+                        if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                            if let Err(_) = tx.send((path.to_string(), Err(e.into()))) {
+                                // Receivers dropped; we can stop.
+                                return;
+                            }
+                        } else {
+                            // No path or non-unicode path. Be conservative for now and panic.
+                            // It would be unfortunate to delete records because a scan temporarily failed.
+                            panic!("Unexpected error from jwalk: {}", e);
+                        }
                         continue;
                     }
                 };
@@ -148,13 +158,22 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
                     continue;
                 };
 
-                cb.push(path);
+                cb.push((path, Ok(())));
                 if cb.len() == cb.capacity() {
-                    cb = tx.send_many(cb).unwrap();
+                    match tx.send_many(cb) {
+                        Ok(empty_vec) => {
+                            cb = empty_vec;
+                        }
+                        Err(_) => {
+                            // Receivers dropped; we can stop.
+                            return;
+                        }
+                    }
                 }
             }
             if cb.len() > 0 {
-                tx.send_many(cb).unwrap();
+                // No need to early-exit here. We're already at the end.
+                _ = tx.send_many(cb);
             }
         });
     }
@@ -169,18 +188,23 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
                 if paths.is_empty() {
                     return;
                 }
-                tx.send_many(
+                if let Err(_) = tx.send_many(
                     paths
                         .into_iter()
-                        .map(|p| {
-                            let metadata = std::fs::symlink_metadata(&p)
-                                .map(From::from)
-                                .map_err(anyhow::Error::from);
-                            (p, metadata)
+                        .map(|(p, result)| match result {
+                            Ok(()) => {
+                                let metadata = std::fs::symlink_metadata(&p)
+                                    .map(From::from)
+                                    .map_err(anyhow::Error::from);
+                                (p, metadata)
+                            }
+                            Err(e) => (p, Err(e)),
                         })
                         .collect::<Vec<_>>(),
-                )
-                .unwrap();
+                ) {
+                    // Receiver dropped; we can early-exit.
+                    return;
+                }
             }
         });
     }
