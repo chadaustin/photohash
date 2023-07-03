@@ -1,6 +1,6 @@
-use crate::iopool;
 use anyhow::Result;
 use image_hasher::HashAlg;
+use imagehash::iopool;
 use imagehash::model::Hash32;
 use imagehash::model::ImageMetadata;
 use std::cmp::min;

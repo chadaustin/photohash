@@ -1,4 +1,5 @@
 use anyhow::Result;
+use imagehash::iopool;
 use imagehash::model::Hash32;
 use std::io::Read;
 use std::path::PathBuf;
@@ -6,7 +7,6 @@ use structopt::StructOpt;
 
 mod cmd;
 mod hash;
-mod iopool;
 
 const READ_SIZE: usize = 65536;
 
