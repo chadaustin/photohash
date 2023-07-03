@@ -29,8 +29,12 @@ fn walkdir_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Fi
     rayon::spawn(move || {
         let mut cb = Vec::with_capacity(SERIAL_CHANNEL_BATCH);
 
+        // TODO: walk each path in parallel.
         for path in paths {
-            for entry in walkdir::WalkDir::new(path) {
+            for entry in walkdir::WalkDir::new(path)
+                .follow_links(false)
+                .same_file_system(true)
+            {
                 let e = match entry {
                     Ok(e) => e,
                     // TODO: propagate error? At least propagate that we failed to traverse a directory.
