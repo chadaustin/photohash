@@ -9,12 +9,10 @@ use imagehash::scan;
 use imagehash::Database;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use structopt::StructOpt;
 use tokio::sync::mpsc;
-use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 const RESULT_CHANNEL_SIZE: usize = 8;
@@ -122,12 +120,11 @@ pub fn do_index(
     // Reads enumerated paths and computes necessary file metadata and content hashes.
     let db = db.clone();
     tokio::spawn(async move {
-        let io_semaphore = Arc::new(Semaphore::new(2));
-
         while let Some((path, metadata)) = path_meta_rx.recv().await {
             let metadata = match metadata {
                 Ok(metadata) => metadata,
                 Err(err) => {
+                    // TODO: propagate error
                     eprintln!("failed to read metadata of {}: {}", path, err);
                     continue;
                 }
@@ -137,19 +134,18 @@ pub fn do_index(
             let db_metadata = match db.lock().unwrap().get_file(&path) {
                 Ok(record) => record,
                 Err(err) => {
+                    // TODO: propagate error
                     eprintln!("failed to read record for {}, {}", path, err);
                     continue;
                 }
             };
 
-            let io_semaphore = io_semaphore.clone();
             let metadata_future = tokio::spawn({
                 let db = db.clone();
-                process_file(db, io_semaphore, path, metadata, db_metadata)
+                process_file(db, path, metadata, db_metadata)
             });
 
             if let Err(_) = metadata_tx.send(metadata_future).await {
-                eprintln!("receiver dropped");
                 return;
             }
         }
@@ -167,7 +163,6 @@ pub struct ProcessFileResult {
 
 async fn process_file(
     db: Arc<Mutex<Database>>,
-    io_semaphore: Arc<Semaphore>,
     path: String,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
@@ -182,18 +177,14 @@ async fn process_file(
                 record.blake3
             } else {
                 blake3_computed = true;
-                let _permit = io_semaphore.acquire().await.unwrap();
-                // TODO: use into_ok() when it's stabilized
-                compute_blake3(PathBuf::from_str(&path).unwrap()).await?
+                compute_blake3(PathBuf::from(&path)).await?
             }
         }
         None => {
             // No record of this file - blake3 must be computed.
             //eprintln!("computing blake3 of {}", path.display());
             blake3_computed = true;
-            let _permit = io_semaphore.acquire().await.unwrap();
-            // TODO: use into_ok() when it's stabilized
-            compute_blake3(PathBuf::from_str(&path).unwrap()).await?
+            compute_blake3(PathBuf::from(&path)).await?
         }
     };
 
