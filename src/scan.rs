@@ -1,4 +1,5 @@
 #![allow(clippy::len_zero)]
+#![allow(clippy::redundant_pattern_matching)]
 
 use crate::model::FileInfo;
 use crate::model::IMPath;

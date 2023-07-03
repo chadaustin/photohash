@@ -200,7 +200,7 @@ pub struct Entry<'a> {
 
 impl<'a> Entry<'a> {
     fn os_str(&self) -> OsString {
-        OsString::from_wide(&self.name)
+        OsString::from_wide(self.name)
     }
 
     fn is_dir(&self) -> bool {
@@ -394,22 +394,20 @@ pub fn windows_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<Fi
                         // TODO: handle errors
                         let child = handle.open_child(e.name).unwrap();
                         dirs_to_add.push((Some(child), child_full_path));
-                    } else {
-                        if let Some(utf8_full_path) = child_full_path.to_str() {
-                            // TODO: return on Err?
-                            _ = meta_tx.send((
-                                utf8_full_path.to_string(),
-                                Ok(FileInfo {
-                                    // TODO: We do technically have
-                                    // the inode number if we call
-                                    // NtQueryDirectoryFileEx with
-                                    // FileIdBothDirectoryInformation.
-                                    inode: 0,
-                                    size: e.size,
-                                    mtime: e.mtime(),
-                                }),
-                            ));
-                        }
+                    } else if let Some(utf8_full_path) = child_full_path.to_str() {
+                        // TODO: return on Err?
+                        _ = meta_tx.send((
+                            utf8_full_path.to_string(),
+                            Ok(FileInfo {
+                                // TODO: We do technically have
+                                // the inode number if we call
+                                // NtQueryDirectoryFileEx with
+                                // FileIdBothDirectoryInformation.
+                                inode: 0,
+                                size: e.size,
+                                mtime: e.mtime(),
+                            }),
+                        ));
                     }
                 }
 
