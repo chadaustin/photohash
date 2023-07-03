@@ -399,8 +399,8 @@ pub fn windows_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<Fi
                         _ = meta_tx.send((
                             utf8_full_path.to_string(),
                             Ok(FileInfo {
-                                // TODO: We do technically have
-                                // the inode number if we call
+                                // TODO: We do technically have the
+                                // inode number if we call
                                 // NtQueryDirectoryFileEx with
                                 // FileIdBothDirectoryInformation.
                                 inode: 0,

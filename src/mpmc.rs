@@ -44,6 +44,14 @@ impl<T> Drop for Sender<T> {
 pub struct SendError<T>(T);
 
 impl<T> Sender<T> {
+    pub fn batch(self, capacity: usize) -> BatchSender<T> {
+        BatchSender {
+            sender: self,
+            capacity,
+            buffer: Vec::with_capacity(capacity),
+        }
+    }
+
     pub fn send(&self, value: T) -> Result<(), SendError<T>> {
         let mut state = self.state.lock().unwrap();
         if state.rx_count == 0 {
@@ -84,6 +92,49 @@ impl<T> Sender<T> {
 
         Ok(values)
     }
+}
+
+pub struct BatchSender<T> {
+    sender: Sender<T>,
+    capacity: usize,
+    buffer: Vec<T>,
+}
+
+impl<T> Drop for BatchSender<T> {
+    fn drop(&mut self) {
+        if self.buffer.is_empty() {
+            return;
+        }
+        // Nothing to do if receiver dropped.
+        _ = self.sender.send_many(std::mem::take(&mut self.buffer));
+    }
+}
+
+impl<T> BatchSender<T> {
+    pub fn send(&mut self, value: T) -> Result<(), SendError<()>> {
+        self.buffer.push(value);
+        // TODO: consider using the full capacity if Vec overallocated.
+        if self.buffer.len() == self.capacity {
+            match self.sender.send_many(std::mem::take(&mut self.buffer)) {
+                Ok(drained_vec) => {
+                    self.buffer = drained_vec;
+                }
+                Err(_) => {
+                    return Err(SendError(()));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn send_many<I: Into<Vec<T>>>(&mut self, values: I) -> Result<(), SendError<()>> {
+        for value in values.into() {
+            self.send(value)?;
+        }
+        Ok(())
+    }
+
+    // TODO: add a drain method?
 }
 
 pub struct Receiver<T> {
@@ -199,6 +250,8 @@ mod tests {
     use crate::mpmc;
     use futures::executor::LocalPool;
     use futures::task::SpawnExt;
+    use std::sync::Arc;
+    use std::sync::Mutex;
 
     #[test]
     fn send_and_recv() {
@@ -397,5 +450,42 @@ mod tests {
             .unwrap();
 
         pool.run();
+    }
+
+    #[test]
+    fn batch_locally_accumulates() {
+        let mut pool = LocalPool::new();
+        let spawner = pool.spawner();
+
+        let (tx, rx) = mpmc::unbounded();
+        let read_values = Arc::new(Mutex::new(Vec::new()));
+        let read_values_outer = read_values.clone();
+
+        spawner
+            .spawn(async move {
+                while let Some(v) = rx.recv().await {
+                    read_values.lock().unwrap().push(v);
+                }
+            })
+            .unwrap();
+
+        let read_values = read_values_outer;
+
+        let mut tx = tx.batch(2);
+
+        assert_eq!(Ok(()), tx.send(1));
+        pool.run_until_stalled();
+        assert_eq!(0, read_values.lock().unwrap().len());
+
+        assert_eq!(Ok(()), tx.send(2));
+        pool.run_until_stalled();
+        assert_eq!(vec![1, 2], *read_values.lock().unwrap());
+
+        assert_eq!(Ok(()), tx.send(3));
+        pool.run_until_stalled();
+        assert_eq!(vec![1, 2], *read_values.lock().unwrap());
+        drop(tx);
+        pool.run_until_stalled();
+        assert_eq!(vec![1, 2, 3], *read_values.lock().unwrap());
     }
 }

@@ -43,7 +43,7 @@ fn walkdir_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileIn
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
-        let mut cb = Vec::with_capacity(SERIAL_CHANNEL_BATCH);
+        let mut tx = tx.batch(SERIAL_CHANNEL_BATCH);
 
         // TODO: walk each path in parallel.
         for path in paths {
@@ -80,24 +80,11 @@ fn walkdir_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileIn
                 // readdir, serial stat access pattern. It's significantly faster
                 // than a parallel crawl and random access stat pattern.
                 let metadata = e.metadata().map_err(anyhow::Error::from);
-                cb.push((path, metadata.map(From::from)));
-                if cb.len() == cb.capacity() {
-                    match tx.send_many(cb) {
-                        Ok(drained_vec) => {
-                            cb = drained_vec;
-                        }
-                        Err(_) => {
-                            // Receivers dropped; we can stop.
-                            return;
-                        }
-                    }
+                if let Err(_) = tx.send((path, metadata.map(From::from))) {
+                    // Receivers dropped; we can stop.
+                    return;
                 }
             }
-        }
-
-        if cb.len() > 0 {
-            // No need to early-exit here. We're already at the end.
-            _ = tx.send_many(cb);
         }
     });
 
@@ -124,7 +111,7 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
     for path in paths {
         let tx = path_tx.clone();
         rayon::spawn(move || {
-            let mut cb = Vec::with_capacity(PARALLEL_CHANNEL_BATCH);
+            let mut tx = tx.batch(PARALLEL_CHANNEL_BATCH);
             // No same_file_system option. https://github.com/Byron/jwalk/issues/27
             for entry in jwalk::WalkDir::new(&path)
                 .skip_hidden(false)
@@ -159,22 +146,10 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
                     continue;
                 };
 
-                cb.push((path, Ok(())));
-                if cb.len() == cb.capacity() {
-                    match tx.send_many(cb) {
-                        Ok(empty_vec) => {
-                            cb = empty_vec;
-                        }
-                        Err(_) => {
-                            // Receivers dropped; we can stop.
-                            return;
-                        }
-                    }
+                if let Err(_) = tx.send((path, Ok(()))) {
+                    // Receivers dropped; we can stop.
+                    return;
                 }
-            }
-            if cb.len() > 0 {
-                // No need to early-exit here. We're already at the end.
-                _ = tx.send_many(cb);
             }
         });
     }
