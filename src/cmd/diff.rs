@@ -65,13 +65,13 @@ pub async fn compute_difference(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = index::do_index(db, vec![src])?;
+    let mut src_rx = index::do_index(db, &[&src])?;
 
     let mut dst_contents = HashMap::new();
 
     eprint!("scanning destination...");
     let mut dots = Dots::new();
-    let mut dst_rx = index::do_index(db, dests)?;
+    let mut dst_rx = index::do_index(db, &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>())?;
     while let Some(pfr_future) = dst_rx.recv().await {
         let pfr = pfr_future.await??;
         dots.increment();

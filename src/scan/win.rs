@@ -22,7 +22,6 @@ use std::mem::MaybeUninit;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
-use std::path::PathBuf;
 use std::ptr;
 use std::sync::mpsc::SendError;
 use std::sync::mpsc::SyncSender;
@@ -353,7 +352,9 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     })
 }
 
-pub fn windows_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+pub fn windows_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+    let paths = super::canonicalize_all(paths)?;
+
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
     thread::Builder::new()

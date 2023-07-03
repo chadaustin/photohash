@@ -225,7 +225,7 @@ impl Scan {
 
         let mut metadata_results = 0;
 
-        let rx = scan(vec![self.path.clone()])?;
+        let rx = scan(&[&self.path])?;
         loop {
             let results = rx.recv_many(self.batch).await;
             if results.is_empty() {
@@ -264,7 +264,7 @@ impl Index {
 
         let mut pfr_results = 0;
 
-        let mut rx = index::do_index(&db, vec![self.path.clone()])?;
+        let mut rx = index::do_index(&db, &[&self.path])?;
         while let Some(jh) = rx.recv().await {
             let _: index::ProcessFileResult = jh.await.unwrap()?;
             pfr_results += 1;
@@ -292,7 +292,7 @@ impl Validate {
             let path = self.path.clone();
             results.push(tokio::spawn(async move {
                 let mut metadata = HashMap::new();
-                let rx = scan(vec![path])?;
+                let rx = scan(&[&path])?;
                 while let Some((path, meta)) = rx.recv().await {
                     //eprintln!("{}: {}", scanner_name, path);
                     metadata.insert(path, meta);

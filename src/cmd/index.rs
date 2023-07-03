@@ -1,5 +1,4 @@
 use crate::compute_blake3;
-use anyhow::Context;
 use anyhow::Result;
 use hex::ToHex;
 use imagehash::model::ContentMetadata;
@@ -8,6 +7,7 @@ use imagehash::model::IMPath;
 use imagehash::model::ImageMetadata;
 use imagehash::scan;
 use imagehash::Database;
+use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -30,13 +30,14 @@ impl Index {
     pub async fn run(&self) -> Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
-        let dirs = if self.dirs.is_empty() {
-            vec![".".into()]
+        let here = Path::new(".");
+        let dirs: Vec<&Path> = if self.dirs.is_empty() {
+            vec![&here]
         } else {
-            self.dirs.clone()
+            self.dirs.iter().map(|p| p.as_ref()).collect()
         };
 
-        let mut metadata_rx = do_index(&db, dirs)?;
+        let mut metadata_rx = do_index(&db, &dirs)?;
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
@@ -111,17 +112,8 @@ impl Index {
 
 pub fn do_index(
     db: &Arc<Mutex<Database>>,
-    dirs: Vec<PathBuf>,
+    dirs: &[&Path],
 ) -> Result<mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>>> {
-    // We have to canonicalize the paths.
-    let dirs: Vec<PathBuf> = dirs
-        .into_iter()
-        .map(|path| {
-            path.canonicalize()
-                .with_context(|| format!("failed to canonicalize {}", path.display()))
-        })
-        .collect::<Result<_, _>>()?;
-
     let scanner = scan::get_default_scan();
     let path_meta_rx = scanner(dirs)?;
 

@@ -3,8 +3,20 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use crate::mpmc;
+use anyhow::Context;
 use anyhow::Result;
+use std::path::Path;
 use std::path::PathBuf;
+
+fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
+    paths
+        .iter()
+        .map(|path| {
+            path.canonicalize()
+                .with_context(|| format!("failed to canonicalize {}", path.display()))
+        })
+        .collect()
+}
 
 /*
  * Within which pools should directory traversals run? When cold, it's
@@ -22,7 +34,9 @@ use std::path::PathBuf;
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-fn walkdir_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn walkdir_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+    let paths = canonicalize_all(paths)?;
+
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
     let (tx, rx) = mpmc::unbounded();
@@ -83,7 +97,9 @@ fn walkdir_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<Fi
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-fn jwalk_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+    let paths = canonicalize_all(paths)?;
+
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
@@ -160,7 +176,7 @@ fn jwalk_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<File
 #[cfg(windows)]
 mod win;
 
-type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
+type ScanFn = fn(&[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
 
 #[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
