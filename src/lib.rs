@@ -7,3 +7,5 @@ pub mod database;
 pub mod model;
 pub mod mpmc;
 pub mod scan;
+
+pub use database::Database;

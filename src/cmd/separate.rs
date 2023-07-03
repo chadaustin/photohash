@@ -1,7 +1,7 @@
 use crate::cmd::diff::compute_difference;
-use crate::Database;
 use anyhow::bail;
 use anyhow::Result;
+use imagehash::Database;
 use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;

@@ -33,9 +33,7 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
     let file_contents = Arc::new(iopool::get_file_contents(path.to_owned()).await?);
 
     let fc = file_contents.clone();
-    let rothash_jh = tokio::spawn(async move {
-        rothash(fc).await
-    });
+    let rothash_jh = tokio::spawn(async move { rothash(fc).await });
 
     let transform = read_transform_from_exif(&file_contents)?;
 

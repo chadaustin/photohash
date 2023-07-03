@@ -2,13 +2,11 @@ use anyhow::Result;
 use std::io::Read;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use imagehash::model::Hash32;
 
 mod cmd;
 mod hash;
 mod iopool;
-
-pub use imagehash::database::Database;
-use imagehash::model::{ContentMetadata, FileInfo, Hash32};
 
 const READ_SIZE: usize = 65536;
 

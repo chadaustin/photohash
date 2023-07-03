@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
 use hex::ToHex;
+use imagehash::model::ContentMetadata;
+use imagehash::model::FileInfo;
+use imagehash::Database;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -10,9 +13,6 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 use crate::compute_blake3;
-use crate::ContentMetadata;
-use crate::Database;
-use crate::FileInfo;
 use imagehash::model::IMPath;
 use imagehash::model::ImageMetadata;
 use imagehash::scan;
