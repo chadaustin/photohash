@@ -6,7 +6,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 mod cmd;
-mod hash;
 
 const READ_SIZE: usize = 65536;
 

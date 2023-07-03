@@ -1,5 +1,5 @@
-use crate::hash::compute_image_hashes;
 use hex::ToHex;
+use imagehash::hash::compute_image_hashes;
 use imagehash::model;
 use std::fmt::Display;
 use std::path::PathBuf;

@@ -4,6 +4,7 @@
 #![allow(clippy::let_unit_value)]
 
 pub mod database;
+pub mod hash;
 pub mod iopool;
 pub mod model;
 pub mod mpmc;

@@ -1,9 +1,9 @@
+use crate::iopool;
+use crate::model::ImageMetadata;
 use anyhow::Result;
 use image::buffer::ConvertBuffer;
 use image::ImageBuffer;
 use image_hasher::HashAlg;
-use imagehash::iopool;
-use imagehash::model::ImageMetadata;
 use libheif_rs::{ColorSpace, HeifContext, ItemId, LibHeif, Plane, RgbChroma};
 use std::convert::TryInto;
 use std::path::Path;

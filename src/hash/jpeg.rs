@@ -1,8 +1,8 @@
+use crate::iopool;
+use crate::model::Hash32;
+use crate::model::ImageMetadata;
 use anyhow::Result;
 use image_hasher::HashAlg;
-use imagehash::iopool;
-use imagehash::model::Hash32;
-use imagehash::model::ImageMetadata;
 use std::cmp::min;
 use std::convert::TryInto;
 use std::path::Path;

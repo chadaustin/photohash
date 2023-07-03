@@ -1,5 +1,5 @@
+use crate::model::ImageMetadata;
 use anyhow::{bail, Result};
-use imagehash::model::ImageMetadata;
 use std::path::Path;
 
 mod heic;
