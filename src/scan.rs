@@ -5,9 +5,25 @@ use crate::mpmc;
 use anyhow::Result;
 use std::path::PathBuf;
 
+/*
+ * Within which pools should directory traversals run? When cold, it's
+ * an IO-bound workload. When readdir() and stat() are in cache, it's
+ * a CPU-bound workload.
+ *
+ * Running in a dedicated thread risks competing with other num-cpu
+ * pools like tokio or rayon. Running in tokio risks stalling other
+ * work with blocking IO.
+ *
+ * The unix IO model gives no right answer. Windows is better:
+ * asynchronous NtQueryDirectoryFile allows largely decoupling CPU
+ * concurrency from IO concurrency.
+ */
+
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn walkdir_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+    // Bounding this pool would allow relinquishing this thread when
+    // crawl has gotten too far ahead.
     let (tx, rx) = mpmc::unbounded();
 
     rayon::spawn(move || {
@@ -51,10 +67,18 @@ pub fn serial_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result
     Ok(rx)
 }
 
+/*
+ * jwalk uses rayon internally so it seems appropriate to use rayon as
+ * well. Unfortunately, while jwalk issues readdir in parallel, the
+ * stat() calls happen serially after the fact. This makes jwalk quite
+ * a lot slower than walkdir on WSL1 and Windows, and not much faster
+ * on Linux or macOS.
+ */
+
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-pub fn parallel_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn jwalk_scan(paths: Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
     let (path_tx, path_rx) = mpmc::unbounded();
     let (meta_tx, meta_rx) = mpmc::unbounded();
 
@@ -136,8 +160,8 @@ type ScanFn = fn(Vec<PathBuf>) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
 #[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
     &[
-        ("walkdir", serial_scan),
-        ("jwalk", parallel_scan),
+        ("walkdir", walkdir_scan),
+        ("jwalk", jwalk_scan),
         ("winscan", win::windows_scan),
     ]
 }
@@ -162,9 +186,9 @@ pub fn get_default_scan() -> ScanFn {
         Err(_) => false,
     };
     if prefer_serial {
-        serial_scan
+        walkdir_scan
     } else {
-        parallel_scan
+        jwalk_scan
     }
 }
 
@@ -173,5 +197,5 @@ pub fn get_default_scan() -> ScanFn {
     // Default to serial on platforms where we haven't measured jwalk
     // as being faster.  It's possible jwalk would be faster on every
     // unix, especially macOS, but we should check.
-    serial_scan
+    walkdir_scan
 }
