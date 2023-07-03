@@ -32,7 +32,7 @@ impl Index {
 
         let here = Path::new(".");
         let dirs: Vec<&Path> = if self.dirs.is_empty() {
-            vec![&here]
+            vec![here]
         } else {
             self.dirs.iter().map(|p| p.as_ref()).collect()
         };

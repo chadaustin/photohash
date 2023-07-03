@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_pattern_matching)]
+
 use anyhow::Result;
 use imagehash::iopool;
 use imagehash::model::Hash32;

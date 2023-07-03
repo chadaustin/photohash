@@ -55,16 +55,22 @@ impl Walkdir {
     async fn run(&self) -> Result<()> {
         let now = Instant::now();
         let mut stat_calls = 0;
+
         for entry in walkdir::WalkDir::new(&self.path) {
-            if let Ok(e) = entry {
-                if !e.file_type().is_file() {
+            let e = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("error from walkdir: {}", e);
                     continue;
                 }
+            };
+            if !e.file_type().is_file() {
+                continue;
+            }
 
-                if self.stat {
-                    _ = e.metadata()?;
-                    stat_calls += 1;
-                }
+            if self.stat {
+                _ = e.metadata()?;
+                stat_calls += 1;
             }
         }
         println!("walkdir: {} ms", now.elapsed().as_millis());
@@ -93,19 +99,24 @@ impl Jwalk {
             .skip_hidden(false)
             .sort(self.sort)
         {
-            if let Ok(e) = entry {
-                if !e.file_type().is_file() {
+            let e = match entry {
+                Ok(e) => e,
+                Err(e) => {
+                    eprintln!("error from jwalk: {}", e);
                     continue;
                 }
+            };
+            if !e.file_type().is_file() {
+                continue;
+            }
 
-                if self.stat {
-                    _ = if self.bypath {
-                        std::fs::symlink_metadata(e.path())?
-                    } else {
-                        e.metadata()?
-                    };
-                    stat_calls += 1;
-                }
+            if self.stat {
+                _ = if self.bypath {
+                    std::fs::symlink_metadata(e.path())?
+                } else {
+                    e.metadata()?
+                };
+                stat_calls += 1;
             }
         }
         println!("jwalk: {} ms", now.elapsed().as_millis());
