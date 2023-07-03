@@ -1,6 +1,16 @@
 use crate::model::{FileInfo, IMPath};
 use crate::mpmc;
 use anyhow::Result;
+use ntapi::ntioapi::FileDirectoryInformation;
+use ntapi::ntioapi::NtCreateFile;
+use ntapi::ntioapi::NtQueryDirectoryFile;
+use ntapi::ntioapi::FILE_DIRECTORY_FILE;
+use ntapi::ntioapi::FILE_DIRECTORY_INFORMATION;
+use ntapi::ntioapi::FILE_OPEN;
+//use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_ALERT;
+use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_NONALERT;
+use ntapi::ntobapi::NtClose;
+use static_assertions::const_assert;
 use std::collections::VecDeque;
 use std::ffi::c_void;
 use std::ffi::OsString;
@@ -8,6 +18,7 @@ use std::io;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
+use std::os::windows::ffi::OsStrExt;
 use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -19,17 +30,6 @@ use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-
-use ntapi::ntioapi::FileDirectoryInformation;
-use ntapi::ntioapi::NtCreateFile;
-use ntapi::ntioapi::NtQueryDirectoryFile;
-use ntapi::ntioapi::FILE_DIRECTORY_FILE;
-use ntapi::ntioapi::FILE_DIRECTORY_INFORMATION;
-use ntapi::ntioapi::FILE_OPEN;
-//use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_ALERT;
-use ntapi::ntioapi::FILE_SYNCHRONOUS_IO_NONALERT;
-use ntapi::ntobapi::NtClose;
-use std::os::windows::ffi::OsStrExt;
 use winapi::shared::ntdef::InitializeObjectAttributes;
 use winapi::shared::ntdef::FALSE;
 use winapi::shared::ntdef::HANDLE;
@@ -52,8 +52,6 @@ use winapi::um::winnt::FILE_SHARE_WRITE;
 use winapi::um::winnt::FILE_TRAVERSE;
 use winapi::um::winnt::HEAP_GENERATE_EXCEPTIONS;
 use winapi::um::winnt::SYNCHRONIZE;
-
-use static_assertions::const_assert;
 
 // Ensure the buffer can always hold one max-length component.
 // Though prefer larger buffers for fewer syscalls.

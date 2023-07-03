@@ -1,8 +1,8 @@
 use anyhow::Result;
+use imagehash::model::Hash32;
 use std::io::Read;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use imagehash::model::Hash32;
 
 mod cmd;
 mod hash;

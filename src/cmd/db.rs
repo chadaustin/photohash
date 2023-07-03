@@ -1,15 +1,12 @@
-use anyhow::Context;
-use anyhow::Result;
-use std::process::Command;
-use structopt::StructOpt;
-
 #[cfg(not(unix))]
 use anyhow::anyhow;
-
+use anyhow::Context;
+use anyhow::Result;
+use imagehash::database;
 #[cfg(not(windows))]
 use std::os::unix::process::CommandExt;
-
-use imagehash::database;
+use std::process::Command;
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "path", about = "Print database location")]

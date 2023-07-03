@@ -1,9 +1,8 @@
 use std::borrow::Borrow;
 use std::fs::Metadata;
-use std::time::SystemTime;
-
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
+use std::time::SystemTime;
 
 pub type Hash<const N: usize> = [u8; N];
 pub type Hash20 = [u8; 20];

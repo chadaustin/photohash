@@ -1,3 +1,7 @@
+use crate::model::ContentMetadata;
+use crate::model::FileInfo;
+use crate::model::Hash32;
+use crate::model::ImageMetadata;
 use anyhow::{anyhow, Context, Result};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
@@ -7,11 +11,6 @@ use self_cell::self_cell;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
-
-use crate::model::ContentMetadata;
-use crate::model::FileInfo;
-use crate::model::Hash32;
-use crate::model::ImageMetadata;
 
 const CREATE_TABLE_FILES: &str = "\
 CREATE TABLE IF NOT EXISTS files (
