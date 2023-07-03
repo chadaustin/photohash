@@ -1,5 +1,4 @@
 use anyhow::{bail, Result};
-use futures::channel::oneshot;
 use image::buffer::ConvertBuffer;
 use image::ImageBuffer;
 use image_hasher::HashAlg;
@@ -9,55 +8,24 @@ use std::convert::TryInto;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use structopt::StructOpt;
 use turbojpeg::TransformOp;
 
 mod cmd;
+mod iopool;
 
 pub use imagehash::database::Database;
 use imagehash::model::Hash32;
 use imagehash::model::{ContentMetadata, FileInfo, ImageMetadata};
 
-const READ_SIZE: usize = 65536;
-
-static IO_POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
-const IO_POOL_CONCURRENCY: usize = 4;
-
 const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
 
-fn get_io_pool() -> &'static rayon::ThreadPool {
-    IO_POOL.get_or_init(|| {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(IO_POOL_CONCURRENCY)
-            .thread_name(|i| format!("io{i}"))
-            .build()
-            .unwrap()
-    })
-}
-
-async fn run_in_io_pool<F, T>(f: F) -> T
-where
-    F: FnOnce() -> T + Send + 'static,
-    T: Send + 'static,
-{
-    let (tx, rx) = oneshot::channel();
-
-    get_io_pool().spawn(move || {
-        _ = tx.send(f());
-    });
-
-    rx.await.unwrap()
-}
-
-async fn get_file_contents(path: PathBuf) -> Result<Vec<u8>> {
-    Ok(run_in_io_pool(move || std::fs::read(path)).await?)
-}
+const READ_SIZE: usize = 65536;
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
     // This assumes that computing blake3 is much faster than IO and
-    // will not unnecessarily content with other workers.
-    run_in_io_pool(move || {
+    // will not contend with other workers.
+    iopool::run_in_io_pool(move || {
         let mut hasher = blake3::Hasher::new();
         let mut file = std::fs::File::open(path)?;
         let mut buffer = [0u8; READ_SIZE];
@@ -75,7 +43,7 @@ async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
 
 pub async fn jpeg_rothash(path: PathBuf) -> Result<Hash32> {
     // jpeg_data outlives the async operation below: how do we tell the borrow checker?
-    let jpeg_data = Arc::new(get_file_contents(path).await?);
+    let jpeg_data = Arc::new(iopool::get_file_contents(path).await?);
     let jd0 = jpeg_data.clone();
     let jd90 = jpeg_data.clone();
     let jd180 = jpeg_data.clone();
@@ -143,7 +111,7 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
 }
 
 async fn jpeg_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
-    let file_contents = get_file_contents(path).await?;
+    let file_contents = iopool::get_file_contents(path).await?;
 
     let mut reader = file_contents.as_slice();
     let exif_segment = exif::get_exif_attr_from_jpeg(&mut reader)?;
@@ -242,7 +210,7 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
 async fn heic_perceptual_hash(path: PathBuf) -> Result<ImageMetadata> {
     let libheif = libheif_rs::LibHeif::new();
 
-    let file_contents = get_file_contents(path).await?;
+    let file_contents = iopool::get_file_contents(path).await?;
 
     // libheif_rs does not allow customizing its multithreading behavior, and
     // allocates new threads per decoded image.
