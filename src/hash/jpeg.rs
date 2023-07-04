@@ -1,3 +1,5 @@
+use crate::hash::unsupported_photo;
+use crate::hash::ImageMetadataError;
 use crate::iopool;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
@@ -29,13 +31,15 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
     }
 }
 
-pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
+pub async fn compute_image_hashes(
+    path: &Path,
+) -> std::result::Result<ImageMetadata, ImageMetadataError> {
     let file_contents = Arc::new(iopool::get_file_contents(path.to_owned()).await?);
 
     let fc = file_contents.clone();
-    let rothash_jh = tokio::spawn(async move { rothash(fc).await });
+    let rothash_jh = tokio::spawn(rothash(fc));
 
-    let transform = read_transform_from_exif(&file_contents)?;
+    let transform = read_transform_from_exif(&file_contents).map_err(unsupported_photo(path))?;
 
     if USE_IMAGE_HASHER_BLOCKHASH {
         let image: image::RgbImage = if transform != TransformOp::None {
@@ -46,9 +50,9 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
                 },
                 &file_contents,
             )?;
-            turbojpeg::decompress_image(&jpeg_data)?
+            turbojpeg::decompress_image(&jpeg_data).map_err(unsupported_photo(path))?
         } else {
-            turbojpeg::decompress_image(&file_contents)?
+            turbojpeg::decompress_image(&file_contents).map_err(unsupported_photo(path))?
         };
 
         let hasher = image_hasher::HasherConfig::new()
@@ -70,9 +74,11 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
                 },
                 &file_contents,
             )?;
-            turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?
+            turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
+                .map_err(unsupported_photo(path))?
         } else {
-            turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)?
+            turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)
+                .map_err(unsupported_photo(path))?
         };
 
         let phash = blockhash::blockhash256(&JpegPerceptualImage { image: &image });
@@ -80,7 +86,7 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
         Ok(ImageMetadata {
             dimensions: Some((image.width as u32, image.height as u32)),
             blockhash256: Some(phash.into()),
-            jpegrothash: Some(rothash_jh.await??),
+            jpegrothash: Some(rothash_jh.await?.map_err(unsupported_photo(path))?),
         })
     }
 }

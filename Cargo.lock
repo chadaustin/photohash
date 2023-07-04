@@ -1074,6 +1074,7 @@ dependencies = [
  "self_cell",
  "static_assertions",
  "structopt",
+ "thiserror",
  "tokio",
  "turbojpeg",
  "vcpkg",

@@ -57,6 +57,7 @@ rusqlite_migration = "*"
 self_cell = "*"
 static_assertions = "*"
 structopt = "*"
+thiserror = "*"
 tokio = { version = "1", features = ["full"] }
 turbojpeg = { version = "*", features = ["image"] }
 walkdir = "2"

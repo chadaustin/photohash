@@ -201,14 +201,31 @@ async fn process_file(
     }
 
     let mut image_metadata = None;
-    /*
     if hash::may_have_metadata(&path) {
-        let image_metadata = db.get_image_metadata(&b3)?;
+        image_metadata = db.lock().unwrap().get_image_metadata(&b3)?;
         if image_metadata.is_none() {
-            image_metadata = compute_image_hashes(&
+            match hash::compute_image_hashes(&path).await {
+                Ok(im) => {
+                    image_metadata = Some(im);
+                    // TODO: write back to the database
+                }
+                Err(hash::ImageMetadataError::UnsupportedPhoto { path, source }) => {
+                    match source {
+                        Some(source) => {
+                            eprintln!("invalid photo {}: {}", path.display(), source);
+                        }
+                        None => {
+                            eprintln!("invalid photo {}: unknown reason", path.display());
+                        }
+                    }
+                    // TODO: record in the database this is an invalid photo
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
         }
     }
-     */
 
     Ok(ProcessFileResult {
         path,

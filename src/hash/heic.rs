@@ -1,6 +1,7 @@
+use crate::hash::unsupported_photo;
+use crate::hash::ImageMetadataError;
 use crate::iopool;
 use crate::model::ImageMetadata;
-use anyhow::Result;
 use image::buffer::ConvertBuffer;
 use image::ImageBuffer;
 use image_hasher::HashAlg;
@@ -36,16 +37,20 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
+pub async fn compute_image_hashes(
+    path: &Path,
+) -> std::result::Result<ImageMetadata, ImageMetadataError> {
     let libheif = LibHeif::new();
 
     let file_contents = iopool::get_file_contents(path.to_owned()).await?;
 
     // libheif_rs does not allow customizing its multithreading behavior, and
     // allocates new threads per decoded image.
-    let mut ctx = HeifContext::read_from_bytes(&file_contents)?;
+    let mut ctx = HeifContext::read_from_bytes(&file_contents).map_err(unsupported_photo(path))?;
     ctx.set_max_decoding_threads(0);
-    let handle = ctx.primary_image_handle()?;
+    let handle = ctx
+        .primary_image_handle()
+        .map_err(unsupported_photo(path))?;
     //eprintln!("width and height: {} x {}", handle.width(), handle.height());
 
     // Get Exif
@@ -61,7 +66,9 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
 
     // Decode the image
     // TODO: ignore_transformations = true, then rotate four
-    let image = libheif.decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)?;
+    let image = libheif
+        .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgb), None)
+        .map_err(unsupported_photo(path))?;
     assert_eq!(image.color_space(), Some(ColorSpace::Rgb(RgbChroma::Rgb)));
     //assert_eq!(image.width(Channel::Interleaved)?, 3024);
     //assert_eq!(image.height(Channel::Interleaved)?, 4032);
