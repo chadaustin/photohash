@@ -15,12 +15,19 @@ fn has_any_extension(path: &Path, exts: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-pub fn is_jpeg(path: &Path) -> bool {
-    has_any_extension(path, JPEG_EXTENSIONS)
+/// Returns true if path has a common JPEG file extension.
+pub fn is_jpeg<P: AsRef<Path>>(path: P) -> bool {
+    has_any_extension(path.as_ref(), JPEG_EXTENSIONS)
 }
 
-pub fn is_heic(path: &Path) -> bool {
-    has_any_extension(path, HEIC_EXTENSIONS)
+/// Returns true if path has a common HEIC file extension.
+pub fn is_heic<P: AsRef<Path>>(path: P) -> bool {
+    has_any_extension(path.as_ref(), HEIC_EXTENSIONS)
+}
+
+/// Returns true if path represents a file that may have ImageMetadata.
+pub fn may_have_metadata(path: &Path) -> bool {
+    is_jpeg(path) || is_heic(path)
 }
 
 pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
@@ -30,5 +37,22 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
         heic::compute_image_hashes(path).await
     } else {
         bail!("not a photo");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_jpeg() {
+        assert!(!is_jpeg("foo"));
+        assert!(!is_jpeg("jpeg"));
+        assert!(!is_jpeg("cake.heic"));
+        assert!(!is_jpeg("readme.txt"));
+
+        assert!(is_jpeg("foo.jpeg"));
+        assert!(is_jpeg("foo.JPG"));
+        assert!(is_jpeg("Hello World.Jpeg"));
     }
 }
