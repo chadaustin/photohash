@@ -26,17 +26,19 @@ pub fn is_heic<P: AsRef<Path>>(path: P) -> bool {
 }
 
 /// Returns true if path represents a file that may have ImageMetadata.
-pub fn may_have_metadata(path: &Path) -> bool {
-    is_jpeg(path) || is_heic(path)
+pub fn may_have_metadata<P: AsRef<Path>>(path: P) -> bool {
+    is_jpeg(&path) || is_heic(&path)
 }
 
+/// Computes and returns image metadata including dimensions and
+/// perceptual hashes.
 pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata> {
     if is_jpeg(path) {
         jpeg::compute_image_hashes(path).await
     } else if is_heic(path) {
         heic::compute_image_hashes(path).await
     } else {
-        bail!("not a photo");
+        bail!("not a supported photo file: {}", path.display());
     }
 }
 

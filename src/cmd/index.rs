@@ -1,6 +1,7 @@
 use crate::compute_blake3;
 use anyhow::Result;
 use hex::ToHex;
+use imagehash::hash;
 use imagehash::model::ContentMetadata;
 use imagehash::model::FileInfo;
 use imagehash::model::IMPath;
@@ -199,24 +200,15 @@ async fn process_file(
             .add_files(&[(&path, &content_metadata)])?;
     }
 
-    let image_metadata = None;
-
+    let mut image_metadata = None;
     /*
-        // TODO: is this an image?
-        if let Some(ext) = path.extension() {
-            if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
-                image_metadata = Some(match db.get_image_metadata(&b3)? {
-                    Some(im) => im,
-                    None => jpeg_perceptual_hash(&path)?,
-                });
-            } else if ext.eq_ignore_ascii_case("heic") {
-                image_metadata = Some(match db.get_image_metadata(&b3)? {
-                    Some(im) => im,
-                    None => heic_perceptual_hash(&path)?,
-                });
-            }
+    if hash::may_have_metadata(&path) {
+        let image_metadata = db.get_image_metadata(&b3)?;
+        if image_metadata.is_none() {
+            image_metadata = compute_image_hashes(&
         }
-    */
+    }
+     */
 
     Ok(ProcessFileResult {
         path,
