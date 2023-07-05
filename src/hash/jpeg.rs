@@ -3,6 +3,7 @@ use crate::hash::ImageMetadataError;
 use crate::iopool;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
+use anyhow::Context;
 use anyhow::Result;
 use image_hasher::HashAlg;
 use std::cmp::min;
@@ -92,8 +93,19 @@ pub async fn compute_image_hashes(
 }
 
 fn read_transform_from_exif(mut file_contents: &[u8]) -> Result<TransformOp> {
-    let exif_segment = exif::get_exif_attr_from_jpeg(&mut file_contents)?;
-    let (fields, _little_endian) = exif::parse_exif(&exif_segment)?;
+    let exif_segment = match exif::get_exif_attr_from_jpeg(&mut file_contents) {
+        Ok(s) => s,
+        Err(exif::Error::NotFound(_) | exif::Error::InvalidFormat(_)) => {
+            return Ok(TransformOp::None);
+        }
+        Err(e) => {
+            return Err(e).context("get_exif_attr_from_jpeg");
+        }
+    };
+    let (fields, _little_endian) = match exif::parse_exif(&exif_segment).context("parse_exif") {
+        Ok(v) => v,
+        Err(_) => return Ok(TransformOp::None),
+    };
 
     let mut transform = TransformOp::None;
     for field in fields {
