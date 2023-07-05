@@ -206,7 +206,7 @@ pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
 
 #[cfg(not(windows))]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
-    &[("walkdir", serial_scan), ("jwalk", parallel_scan)]
+    &[("walkdir", walkdir_scan), ("jwalk", jwalk_scan)]
 }
 
 #[cfg(windows)]
