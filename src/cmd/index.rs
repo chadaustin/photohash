@@ -13,7 +13,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use structopt::StructOpt;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 const RESULT_CHANNEL_SIZE: usize = 8;
@@ -40,20 +42,20 @@ impl Index {
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
-            let process_file_result = match content_metadata_future {
+            let pfr = match content_metadata_future {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("failed to read the thing {}", e);
                     continue;
                 }
             };
-            let content_metadata = process_file_result.content_metadata;
-            if process_file_result.blake3_computed || process_file_result.image_metadata_computed {
+            let content_metadata = pfr.content_metadata;
+            if pfr.blake3_computed || pfr.image_metadata_computed {
                 println!(
                     "{} {:>8}K {}",
                     content_metadata.blake3.encode_hex::<String>(),
                     content_metadata.file_info.size / 1024,
-                    dunce::simplified(process_file_result.path.as_ref()).display(),
+                    dunce::simplified(pfr.path.as_ref()).display(),
                 );
             }
         }
@@ -115,6 +117,11 @@ pub fn do_index(
     // Reads enumerated paths and computes necessary file metadata and content hashes.
     let db = db.clone();
     tokio::spawn(async move {
+        // Limit the number of concurrent perceptual hashes, since
+        // keeping pixel data in RAM is expensive.
+        let pixel_semaphore_count = 2 * Handle::current().metrics().num_workers();
+        let pixel_semaphore = Arc::new(Semaphore::new(pixel_semaphore_count));
+
         while let Some((path, metadata)) = path_meta_rx.recv().await {
             let metadata = match metadata {
                 Ok(metadata) => metadata,
@@ -137,7 +144,8 @@ pub fn do_index(
 
             let metadata_future = tokio::spawn({
                 let db = db.clone();
-                process_file(db, path, metadata, db_metadata)
+                let pixel_semaphore = pixel_semaphore.clone();
+                process_file(db, pixel_semaphore, path, metadata, db_metadata)
             });
 
             if let Err(_) = metadata_tx.send(metadata_future).await {
@@ -159,6 +167,7 @@ pub struct ProcessFileResult {
 
 async fn process_file(
     db: Arc<Mutex<Database>>,
+    pixel_semaphore: Arc<Semaphore>,
     path: String,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
@@ -197,9 +206,11 @@ async fn process_file(
 
     let mut image_metadata_computed = false;
     let mut image_metadata = None;
-    if hash::may_have_metadata(&path) {
+    if hash::may_have_metadata(&path, &content_metadata.file_info) {
         image_metadata = db.lock().unwrap().get_image_metadata(&b3)?;
         if image_metadata.is_none() {
+            let _permit = pixel_semaphore.clone().acquire_owned().await?;
+
             match hash::compute_image_hashes(&path).await {
                 Ok(im) => {
                     db.lock()

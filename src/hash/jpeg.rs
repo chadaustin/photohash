@@ -136,6 +136,8 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
     let jd180 = jpeg_data.clone();
     let jd270 = jpeg_data;
 
+    // TODO: Is it worth running one of these immediately? One fewer
+    // allocation, and maybe fewer cache misses?
     let (rot0, rot90, rot180, rot270) = tokio::try_join!(
         tokio::spawn(async move {
             let image = turbojpeg::decompress(&jd0, turbojpeg::PixelFormat::RGB)?;

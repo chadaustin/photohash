@@ -1,3 +1,4 @@
+use crate::model::FileInfo;
 use crate::model::ImageMetadata;
 use std::path::Path;
 use std::path::PathBuf;
@@ -72,7 +73,11 @@ pub fn is_heic<P: AsRef<Path>>(path: P) -> bool {
 }
 
 /// Returns true if path represents a file that may have ImageMetadata.
-pub fn may_have_metadata<P: AsRef<Path>>(path: P) -> bool {
+pub fn may_have_metadata<P: AsRef<Path>>(path: P, file_info: &FileInfo) -> bool {
+    // Too large to decode.
+    if file_info.size > 40_000_000 {
+        return false;
+    }
     is_jpeg(&path) || is_heic(&path)
 }
 
