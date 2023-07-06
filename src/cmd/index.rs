@@ -48,19 +48,13 @@ impl Index {
                 }
             };
             let content_metadata = process_file_result.content_metadata;
-            let image_metadata = process_file_result.image_metadata;
-            if process_file_result.blake3_computed {
+            if process_file_result.blake3_computed || process_file_result.image_metadata_computed {
                 println!(
                     "{} {:>8}K {}",
                     content_metadata.blake3.encode_hex::<String>(),
                     content_metadata.file_info.size / 1024,
                     dunce::simplified(process_file_result.path.as_ref()).display(),
                 );
-            }
-            if let Some(im) = image_metadata {
-                db.lock()
-                    .unwrap()
-                    .add_image_metadata(&content_metadata.blake3, &im)?;
             }
         }
 
@@ -159,6 +153,7 @@ pub struct ProcessFileResult {
     pub path: IMPath,
     pub blake3_computed: bool,
     pub content_metadata: ContentMetadata,
+    pub image_metadata_computed: bool,
     pub image_metadata: Option<ImageMetadata>,
 }
 
@@ -200,14 +195,18 @@ async fn process_file(
             .add_files(&[(&path, &content_metadata)])?;
     }
 
+    let mut image_metadata_computed = false;
     let mut image_metadata = None;
     if hash::may_have_metadata(&path) {
         image_metadata = db.lock().unwrap().get_image_metadata(&b3)?;
         if image_metadata.is_none() {
             match hash::compute_image_hashes(&path).await {
                 Ok(im) => {
+                    db.lock()
+                        .unwrap()
+                        .add_image_metadata(&content_metadata.blake3, &im)?;
+                    image_metadata_computed = true;
                     image_metadata = Some(im);
-                    // TODO: write back to the database
                 }
                 Err(hash::ImageMetadataError::UnsupportedPhoto { path, source }) => {
                     match source {
@@ -231,6 +230,7 @@ async fn process_file(
         path,
         blake3_computed,
         content_metadata,
+        image_metadata_computed,
         image_metadata,
     })
 }
