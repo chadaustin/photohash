@@ -40,14 +40,21 @@ impl Index {
 
         let mut metadata_rx = do_index(&db, &dirs)?;
 
-        let _awake = keepawake::Builder::new()
+        let _awake = match keepawake::Builder::new()
             .display(false)
             .idle(true)
             .sleep(true)
             .reason("indexing files")
             .app_name("imagehash")
             .app_reverse_domain("me.chadaustin.imagehash")
-            .create()?;
+            .create()
+        {
+            Ok(awake) => Some(awake),
+            Err(e) => {
+                eprintln!("WARNING: keepawake failed, ignoring: {}", e);
+                None
+            }
+        };
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
