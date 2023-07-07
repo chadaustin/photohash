@@ -119,7 +119,12 @@ pub fn do_index(
     tokio::spawn(async move {
         // Limit the number of concurrent perceptual hashes, since
         // keeping pixel data in RAM is expensive.
-        let pixel_semaphore_count = 2 * Handle::current().metrics().num_workers();
+        //
+        // TODO: To actually bound memory usage while maximizing CPU
+        // utilization, use a semaphore with number-of-pixels count
+        // and acquire width*height permits after reading the image
+        // header.
+        let pixel_semaphore_count = 4 * Handle::current().metrics().num_workers();
         let pixel_semaphore = Arc::new(Semaphore::new(pixel_semaphore_count));
 
         while let Some((path, metadata)) = path_meta_rx.recv().await {
