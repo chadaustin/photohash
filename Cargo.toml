@@ -45,6 +45,7 @@ chrono = "*"
 directories = "*"
 dunce = "*"
 kamadak-exif = "*"
+keepawake = "*"
 futures = "*"
 hex = "*"
 image = { version = "*", features = [] }
