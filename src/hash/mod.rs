@@ -16,7 +16,7 @@ pub enum ImageMetadataError {
         path: PathBuf,
         source: Option<anyhow::Error>,
     },
-    #[error("error reading image metadata")]
+    #[error("unexpected error reading image metadata")]
     Other(#[from] anyhow::Error),
 }
 

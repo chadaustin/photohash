@@ -16,8 +16,12 @@ use structopt::StructOpt;
 pub struct Separate {
     #[structopt(parse(from_os_str))]
     src: PathBuf,
+
     #[structopt(parse(from_os_str), required(true))]
     dests: Vec<PathBuf>,
+
+    #[structopt(long)]
+    exact: bool,
 
     #[structopt(long)]
     link: Option<PathBuf>,
@@ -84,7 +88,8 @@ impl Separate {
 
         let db = Arc::new(Mutex::new(Database::open()?));
 
-        let difference = compute_difference(&db, self.src.clone(), self.dests.clone()).await?;
+        let difference =
+            compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
         if difference.is_empty() {
             eprintln!("Nothing missing in destination");
             return Ok(());

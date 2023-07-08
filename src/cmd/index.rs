@@ -4,6 +4,7 @@ use hex::ToHex;
 use imagehash::hash;
 use imagehash::model::ContentMetadata;
 use imagehash::model::FileInfo;
+use imagehash::model::Hash32;
 use imagehash::model::IMPath;
 use imagehash::model::ImageMetadata;
 use imagehash::scan;
@@ -184,6 +185,20 @@ pub struct ProcessFileResult {
     pub content_metadata: ContentMetadata,
     pub image_metadata_computed: bool,
     pub image_metadata: Option<ImageMetadata>,
+}
+
+impl ProcessFileResult {
+    pub fn blockhash256(&self) -> Option<&Hash32> {
+        self.image_metadata
+            .as_ref()
+            .and_then(|im| im.blockhash256.as_ref())
+    }
+
+    pub fn jpegrothash(&self) -> Option<&Hash32> {
+        self.image_metadata
+            .as_ref()
+            .and_then(|im| im.jpegrothash.as_ref())
+    }
 }
 
 async fn process_file(
