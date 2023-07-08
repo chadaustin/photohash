@@ -74,7 +74,8 @@ pub async fn compute_image_hashes(
                     ..Default::default()
                 },
                 &file_contents,
-            ).map_err(unsupported_photo(path))?;
+            )
+            .map_err(unsupported_photo(path))?;
             turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
                 .map_err(unsupported_photo(path))?
         } else {

@@ -35,6 +35,8 @@ impl Dots {
     fn increment(&mut self) {
         self.i += 1;
         if self.i == self.c {
+            // Decelerate over time. Acceleration is nicer but we
+            // don't know how many files there are.
             self.i = 0;
             self.c += self.c >> 4;
             eprint!(".");
@@ -48,13 +50,14 @@ impl Diff {
 
         let difference =
             compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
-        if difference.is_empty() {
+        let missing = &difference.missing;
+        if missing.is_empty() {
             eprintln!("All files exist in destination");
             return Ok(());
         }
 
         eprintln!("Files not in destination:");
-        for path in difference {
+        for path in missing {
             println!("  {}", path);
         }
 
@@ -62,12 +65,21 @@ impl Diff {
     }
 }
 
+#[derive(Default)]
+pub struct Differences {
+    pub missing: Vec<IMPath>,
+
+    pub matches_by_contents: HashMap<IMPath, Vec<IMPath>>,
+    pub matches_by_blockhash: HashMap<IMPath, Vec<IMPath>>,
+    pub matches_by_jpegrothash: HashMap<IMPath, Vec<IMPath>>,
+}
+
 pub async fn compute_difference(
     db: &Arc<Mutex<Database>>,
     src: PathBuf,
     dests: Vec<PathBuf>,
     exact: bool,
-) -> Result<Vec<IMPath>> {
+) -> Result<Differences> {
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
@@ -77,8 +89,8 @@ pub async fn compute_difference(
     let mut by_contents: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
     // blockhash256 -> {path}
     let mut by_blockhash: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
-    // rothash -> {path}
-    let mut by_rothash: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
+    // jpegrothash -> {path}
+    let mut by_jpegrothash: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
 
     // Scan the destination(s) and build hash tables.
     eprint!("scanning destination...");
@@ -98,33 +110,53 @@ pub async fn compute_difference(
             by_blockhash.entry(*bh).or_default().insert(path.clone());
         }
         if let Some(rh) = pfr.jpegrothash() {
-            by_rothash.entry(*rh).or_default().insert(path.clone());
+            by_jpegrothash.entry(*rh).or_default().insert(path.clone());
         }
     }
     eprintln!();
 
-    let mut difference = Vec::new();
+    let mut differences = Differences::default();
     while let Some(pfr_future) = src_rx.recv().await {
         let pfr = pfr_future.await??;
         let (path, blake3) = (&pfr.path, pfr.content_metadata.blake3);
-        if by_contents.contains_key(&blake3) {
-            // TODO: worth printing the originating path(s)?
+        if let Some(paths) = by_contents.get(&blake3) {
+            differences
+                .matches_by_contents
+                .entry(path.clone())
+                .or_default()
+                .append(&mut paths.clone().into_iter().collect());
             continue;
         }
 
         if !exact {
-            if Some(true) == pfr.blockhash256().map(|bh| by_blockhash.contains_key(bh)) {
-                // TODO: worth printing the originating path(s)?
+            if let Some(mut paths) = pfr
+                .blockhash256()
+                .and_then(|bh| by_blockhash.get(bh))
+                .map(|paths| paths.clone().into_iter().collect())
+            {
+                differences
+                    .matches_by_blockhash
+                    .entry(path.clone())
+                    .or_default()
+                    .append(&mut paths);
                 continue;
             }
-            if Some(true) == pfr.jpegrothash().map(|rh| by_rothash.contains_key(rh)) {
-                // TODO: worth printing the originating path(s)?
+            if let Some(mut paths) = pfr
+                .jpegrothash()
+                .and_then(|rh| by_jpegrothash.get(rh))
+                .map(|paths| paths.clone().into_iter().collect())
+            {
+                differences
+                    .matches_by_jpegrothash
+                    .entry(path.clone())
+                    .or_default()
+                    .append(&mut paths);
                 continue;
             }
         }
 
-        difference.push(path.clone());
+        differences.missing.push(path.clone());
     }
 
-    Ok(difference)
+    Ok(differences)
 }

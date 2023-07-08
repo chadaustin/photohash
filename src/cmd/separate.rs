@@ -88,14 +88,14 @@ impl Separate {
 
         let db = Arc::new(Mutex::new(Database::open()?));
 
-        let difference =
+        let differences =
             compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
-        if difference.is_empty() {
+        if differences.missing.is_empty() {
             eprintln!("Nothing missing in destination");
             return Ok(());
         }
 
-        for path in difference {
+        for path in differences.missing {
             let path = PathBuf::from(path);
             let rel = match path.strip_prefix(&self.src) {
                 Ok(rel) => rel,
