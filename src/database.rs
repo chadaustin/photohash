@@ -431,4 +431,18 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn record_and_retrieve_invalid_image_metadata() -> Result<()> {
+        let mut db = Database::open_memory()?;
+        let blake3 = Hash32::default();
+
+        assert_eq!(None, db.get_image_metadata(&blake3)?);
+
+        let im = ImageMetadata::invalid();
+        db.add_image_metadata(&blake3, &im)?;
+        assert_eq!(true, db.get_image_metadata(&blake3)?.unwrap().is_invalid());
+
+        Ok(())
+    }
 }

@@ -76,3 +76,17 @@ pub struct ImageMetadata {
     /// implementation, but it's very slow.
     pub blockhash256: Option<Hash32>,
 }
+
+impl ImageMetadata {
+    pub fn invalid() -> Self {
+        Self {
+            dimensions: None,
+            jpegrothash: None,
+            blockhash256: None,
+        }
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        self.dimensions.is_none()
+    }
+}
