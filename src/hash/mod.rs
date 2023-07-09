@@ -11,15 +11,55 @@ const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
 const JPEG_EXTENSIONS: &[&str] = &["jpg", "jpeg", "jpe", "jif", "jfif", "jfi"];
 const HEIC_EXTENSIONS: &[&str] = &["heif", "heic"];
 
-#[derive(thiserror::Error, Debug)]
+// TODO: We could replace all of the custom impls with thiserror if we
+// had a PathBuf wrapper type that Displayed with dunce::simplified.
+#[derive(Debug)]
 pub enum ImageMetadataError {
-    #[error("not a supported photo file: {path}")]
+    //#[error("not a supported photo file: {path}")]
     UnsupportedPhoto {
         path: PathBuf,
         source: Option<anyhow::Error>,
     },
-    #[error("unexpected error reading image metadata")]
-    Other(#[from] anyhow::Error),
+    //#[error("unexpected error reading image metadata")]
+    Other(/*#[from]*/ anyhow::Error),
+}
+
+impl std::error::Error for ImageMetadataError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::UnsupportedPhoto { path, source } => {
+                _ = path;
+                source.as_ref().map(|e| e.as_ref())
+            }
+            Self::Other(source) => Some(source.as_ref()),
+        }
+    }
+}
+
+impl std::fmt::Display for ImageMetadataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedPhoto { path, source } => {
+                _ = source;
+                // All of these custom instances are just to customize how path is displayed.
+                write!(
+                    f,
+                    "not a supported photo file: {}",
+                    dunce::simplified(path).display()
+                )
+            }
+            Self::Other(source) => {
+                _ = source;
+                write!(f, "unexpected error reading image metadata")
+            }
+        }
+    }
+}
+
+impl From<anyhow::Error> for ImageMetadataError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::Other(e)
+    }
 }
 
 // TODO: How can I avoid hand-writing these instances?

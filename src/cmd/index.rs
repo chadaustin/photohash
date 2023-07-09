@@ -258,7 +258,7 @@ async fn process_file(
                 Err(hash::ImageMetadataError::UnsupportedPhoto { path, source }) => {
                     match source {
                         Some(source) => {
-                            eprintln!("invalid photo {}: {:#?}", path.display(), source);
+                            eprintln!("invalid photo {}: {:?}", path.display(), source);
                         }
                         None => {
                             eprintln!("invalid photo {}: unknown reason", path.display());
