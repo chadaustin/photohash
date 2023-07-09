@@ -68,11 +68,11 @@ pub struct ImageMetadata {
     /// of EXIF.
     pub dimensions: Option<(u32, u32)>,
 
+    /// 256-bit blake3 hash of rotation-independent pixel data.
+    pub jpegrothash: Option<Hash32>,
+
     /// 256-bit blockhash as computed by the `blockhash` crate.
     /// image_hasher (img_hash) also provides a blockhash
     /// implementation, but it's very slow.
     pub blockhash256: Option<Hash32>,
-
-    /// 256-bit blake3 hash of rotation-independent pixel data.
-    pub jpegrothash: Option<Hash32>,
 }
