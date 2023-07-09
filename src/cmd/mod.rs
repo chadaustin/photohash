@@ -4,6 +4,7 @@ use anyhow::Result;
 use structopt::StructOpt;
 
 mod benchmark;
+mod broken;
 mod db;
 mod diff;
 mod exif;
@@ -15,6 +16,7 @@ mod separate;
 #[structopt(name = "imagehash", about = "Index your files")]
 pub enum MainCommand {
     Benchmark(benchmark::Benchmark),
+    Broken(broken::Broken),
     Db(db::Db),
     Diff(diff::Diff),
     Exif(exif::Exif),
@@ -27,6 +29,7 @@ impl MainCommand {
     pub async fn run(self) -> Result<()> {
         match self {
             MainCommand::Benchmark(cmd) => cmd.run().await,
+            MainCommand::Broken(cmd) => cmd.run().await,
             MainCommand::Db(cmd) => cmd.run().await,
             MainCommand::Diff(cmd) => cmd.run().await,
             MainCommand::Exif(cmd) => cmd.run().await,

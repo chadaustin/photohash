@@ -86,6 +86,10 @@ impl ImageMetadata {
         }
     }
 
+    pub fn is_valid(&self) -> bool {
+        self.dimensions.is_some()
+    }
+
     pub fn is_invalid(&self) -> bool {
         self.dimensions.is_none()
     }

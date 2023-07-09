@@ -20,6 +20,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 const RESULT_CHANNEL_SIZE: usize = 8;
+const TRACE_INVALID_PHOTOS: bool = false;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "index", about = "Scan directories and update the index")]
@@ -249,28 +250,36 @@ async fn process_file(
 
             match hash::compute_image_hashes(&path).await {
                 Ok(im) => {
-                    db.lock()
-                        .unwrap()
-                        .add_image_metadata(&content_metadata.blake3, &im)?;
                     image_metadata_computed = true;
                     image_metadata = Some(im);
                 }
                 Err(hash::ImageMetadataError::UnsupportedPhoto { path, source }) => {
-                    match source {
-                        Some(source) => {
-                            eprintln!("invalid photo {}: {:?}", path.display(), source);
-                        }
-                        None => {
-                            eprintln!("invalid photo {}: unknown reason", path.display());
+                    if TRACE_INVALID_PHOTOS {
+                        // TODO: Should we forward the source with the error here?
+                        match source {
+                            Some(source) => {
+                                eprintln!("invalid photo {}: {:?}", path.display(), source);
+                            }
+                            None => {
+                                eprintln!("invalid photo {}: unknown reason", path.display());
+                            }
                         }
                     }
-                    // TODO: record in the database this is an invalid photo
+                    // Record in the database this is an invalid photo.
+                    image_metadata_computed = true;
+                    image_metadata = Some(ImageMetadata::invalid());
                 }
                 Err(e) => {
                     return Err(e.into());
                 }
             }
         }
+    }
+
+    if image_metadata_computed {
+        db.lock()
+            .unwrap()
+            .add_image_metadata(&content_metadata.blake3, image_metadata.as_ref().unwrap())?;
     }
 
     Ok(ProcessFileResult {
