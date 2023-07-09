@@ -15,12 +15,17 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(name = "diff", about = "List files missing in destination")]
 pub struct Diff {
+    /// Disregard perceptual hashes and only list files whose exact contents aren't in destination
     #[structopt(long)]
     exact: bool,
+
+    /// For all files that exist in destination, display corresponding paths
     #[structopt(long)]
     matches: bool,
+
     #[structopt(parse(from_os_str))]
     src: PathBuf,
+
     #[structopt(parse(from_os_str), required(true))]
     dests: Vec<PathBuf>,
 }

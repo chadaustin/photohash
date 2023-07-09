@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "Manually compute hashes for specified files")]
+#[structopt(about = "Manually display hashes for specific files")]
 pub struct Hash {
     #[structopt(required(true))]
     files: Vec<PathBuf>,

@@ -20,12 +20,15 @@ pub struct Separate {
     #[structopt(parse(from_os_str), required(true))]
     dests: Vec<PathBuf>,
 
+    /// Disregard perceptual hashes and only list files whose exact contents aren't in destination
     #[structopt(long)]
     exact: bool,
 
+    /// Create hard links to files missing in destination
     #[structopt(long)]
     link: Option<PathBuf>,
 
+    /// Move files missing in destination
     #[structopt(long)]
     r#move: Option<PathBuf>,
 }
