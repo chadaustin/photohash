@@ -13,6 +13,9 @@ use std::path::Path;
 use std::sync::Arc;
 use turbojpeg::TransformOp;
 
+const DECOMPRESS_ERROR: &str = "failed to decompress JPEG";
+const TRANSFORM_ERROR: &str = "failed to transform JPEG";
+
 struct JpegPerceptualImage<'a> {
     image: &'a turbojpeg::Image<Vec<u8>>,
 }
@@ -49,10 +52,15 @@ pub async fn compute_image_hashes(
                     ..Default::default()
                 },
                 &file_contents,
-            )?;
-            turbojpeg::decompress_image(&jpeg_data).map_err(unsupported_photo(path))?
+            )
+            .context(TRANSFORM_ERROR)?;
+            turbojpeg::decompress_image(&jpeg_data)
+                .context("decompress_image")
+                .map_err(unsupported_photo(path))?
         } else {
-            turbojpeg::decompress_image(&file_contents).map_err(unsupported_photo(path))?
+            turbojpeg::decompress_image(&file_contents)
+                .context("decompress_image")
+                .map_err(unsupported_photo(path))?
         };
 
         let hasher = image_hasher::HasherConfig::new()
@@ -74,11 +82,14 @@ pub async fn compute_image_hashes(
                 },
                 &file_contents,
             )
+            .context(TRANSFORM_ERROR)
             .map_err(unsupported_photo(path))?;
             turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)
                 .map_err(unsupported_photo(path))?
         } else {
             turbojpeg::decompress(&file_contents, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)
                 .map_err(unsupported_photo(path))?
         };
 
@@ -140,7 +151,8 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
     // allocation, and maybe fewer cache misses?
     let (rot0, rot90, rot180, rot270) = tokio::try_join!(
         tokio::spawn(async move {
-            let image = turbojpeg::decompress(&jd0, turbojpeg::PixelFormat::RGB)?;
+            let image = turbojpeg::decompress(&jd0, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)?;
             Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
         }),
         tokio::spawn(async move {
@@ -150,8 +162,10 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
                     ..Default::default()
                 },
                 &jd90,
-            )?;
-            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            )
+            .context(TRANSFORM_ERROR)?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)?;
             Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
         }),
         tokio::spawn(async move {
@@ -161,8 +175,10 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
                     ..Default::default()
                 },
                 &jd180,
-            )?;
-            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            )
+            .context(TRANSFORM_ERROR)?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)?;
             Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
         }),
         tokio::spawn(async move {
@@ -172,8 +188,10 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
                     ..Default::default()
                 },
                 &jd270,
-            )?;
-            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)?;
+            )
+            .context(TRANSFORM_ERROR)?;
+            let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
+                .context(DECOMPRESS_ERROR)?;
             Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
         }),
     )?;
