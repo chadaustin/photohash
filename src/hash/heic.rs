@@ -1,5 +1,6 @@
 use crate::hash::unsupported_photo;
 use crate::hash::ImageMetadataError;
+use crate::hash::USE_IMAGE_HASHER_BLOCKHASH;
 use crate::iopool;
 use crate::model::ImageMetadata;
 use image::buffer::ConvertBuffer;
@@ -13,8 +14,6 @@ use libheif_rs::Plane;
 use libheif_rs::RgbChroma;
 use std::convert::TryInto;
 use std::path::Path;
-
-const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
 
 struct HeifPerceptualImage<'a> {
     plane: &'a Plane<&'a [u8]>,

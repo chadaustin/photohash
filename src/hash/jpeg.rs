@@ -1,5 +1,6 @@
 use crate::hash::unsupported_photo;
 use crate::hash::ImageMetadataError;
+use crate::hash::USE_IMAGE_HASHER_BLOCKHASH;
 use crate::iopool;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
@@ -11,8 +12,6 @@ use std::convert::TryInto;
 use std::path::Path;
 use std::sync::Arc;
 use turbojpeg::TransformOp;
-
-const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
 
 struct JpegPerceptualImage<'a> {
     image: &'a turbojpeg::Image<Vec<u8>>,

@@ -6,6 +6,8 @@ use std::path::PathBuf;
 mod heic;
 mod jpeg;
 
+const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
+
 const JPEG_EXTENSIONS: &[&str] = &["jpg", "jpeg", "jpe", "jif", "jfif", "jfi"];
 const HEIC_EXTENSIONS: &[&str] = &["heif", "heic"];
 
