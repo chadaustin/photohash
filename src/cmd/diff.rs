@@ -58,11 +58,6 @@ impl Diff {
 
         let difference =
             compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
-        let missing = &difference.missing;
-        if missing.is_empty() {
-            eprintln!("All files exist in destination");
-            return Ok(());
-        }
 
         if self.matches {
             Self::print_matches("Exact matches:", difference.matches_by_contents);
@@ -76,7 +71,13 @@ impl Diff {
             );
         }
 
-        eprintln!("Files not in destination:");
+        let missing = &difference.missing;
+        if missing.is_empty() {
+            println!("All files exist in destination");
+            return Ok(());
+        }
+
+        println!("Files not in destination:");
         for path in missing {
             println!("  {}", path);
         }
@@ -89,24 +90,24 @@ impl Diff {
             return;
         }
 
-        eprintln!("{label}\n");
+        println!("{label}\n");
         for (path, mut matching) in matches {
             matching.sort();
             let path = dunce::simplified(path.as_ref()).display();
             if matching.len() == 1 {
-                eprintln!(
+                println!(
                     "{} -> {}",
                     path,
                     dunce::simplified(matching[0].as_ref()).display()
                 );
             } else {
-                eprintln!("{} ->", path);
+                println!("{} ->", path);
                 for m in matching {
-                    eprintln!("  {}", dunce::simplified(m.as_ref()).display());
+                    println!("  {}", dunce::simplified(m.as_ref()).display());
                 }
             }
         }
-        eprintln!();
+        println!();
     }
 }
 
