@@ -1,8 +1,8 @@
 use crate::cmd::index;
 use anyhow::Result;
-use imagehash::model::Hash32;
-use imagehash::model::IMPath;
-use imagehash::Database;
+use photohash::model::Hash32;
+use photohash::model::IMPath;
+use photohash::Database;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;

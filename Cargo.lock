@@ -1308,42 +1308,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imagehash"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-std",
- "blake3",
- "blockhash",
- "chrono",
- "criterion",
- "directories",
- "dunce",
- "futures",
- "hex",
- "image",
- "image_hasher",
- "jwalk",
- "kamadak-exif",
- "keepawake",
- "libheif-rs",
- "ntapi",
- "rayon",
- "rusqlite",
- "rusqlite_migration",
- "self_cell",
- "static_assertions",
- "structopt",
- "thiserror",
- "tokio",
- "turbojpeg",
- "vcpkg",
- "walkdir",
- "wild",
- "winapi",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1867,6 +1831,42 @@ name = "percent-encoding"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
+
+[[package]]
+name = "photohash"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-std",
+ "blake3",
+ "blockhash",
+ "chrono",
+ "criterion",
+ "directories",
+ "dunce",
+ "futures",
+ "hex",
+ "image",
+ "image_hasher",
+ "jwalk",
+ "kamadak-exif",
+ "keepawake",
+ "libheif-rs",
+ "ntapi",
+ "rayon",
+ "rusqlite",
+ "rusqlite_migration",
+ "self_cell",
+ "static_assertions",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "turbojpeg",
+ "vcpkg",
+ "walkdir",
+ "wild",
+ "winapi",
+]
 
 [[package]]
 name = "pin-project"

@@ -2,7 +2,7 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
-use imagehash::database;
+use photohash::database;
 #[cfg(not(windows))]
 use std::os::unix::process::CommandExt;
 use std::process::Command;

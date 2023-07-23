@@ -1,7 +1,7 @@
 use crate::cmd::index::do_index;
 use anyhow::Result;
-use imagehash::hash;
-use imagehash::Database;
+use photohash::hash;
+use photohash::Database;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;

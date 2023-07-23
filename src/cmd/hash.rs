@@ -1,6 +1,6 @@
 use hex::ToHex;
-use imagehash::hash::compute_image_hashes;
-use imagehash::model;
+use photohash::hash::compute_image_hashes;
+use photohash::model;
 use std::fmt::Display;
 use std::path::PathBuf;
 use structopt::StructOpt;

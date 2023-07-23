@@ -1,16 +1,16 @@
 [package]
-name = "imagehash"
+name = "photohash"
 version = "0.1.0"
 authors = ["Chad Austin <chad@chadaustin.me>"]
 edition = "2018"
 build = "build.rs"
 
 [lib]
-name = "imagehash"
+name = "photohash"
 path = "src/lib.rs"
 
 [[bin]]
-name = "imagehash"
+name = "photohash"
 path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

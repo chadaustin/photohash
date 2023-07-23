@@ -1,5 +1,5 @@
 use criterion::*;
-use imagehash::database::Database;
+use photohash::database::Database;
 
 fn database_benchmark(c: &mut Criterion) {
     //let mut c = Criterion::default().measurement_time(std::time::Duration::from_secs(60));

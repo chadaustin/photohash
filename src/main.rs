@@ -1,8 +1,8 @@
 #![allow(clippy::redundant_pattern_matching)]
 
 use anyhow::Result;
-use imagehash::iopool;
-use imagehash::model::Hash32;
+use photohash::iopool;
+use photohash::model::Hash32;
 use std::io::Read;
 use std::path::PathBuf;
 use structopt::StructOpt;
