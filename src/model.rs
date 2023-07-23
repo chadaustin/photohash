@@ -14,6 +14,10 @@ pub type IMPath = String;
 
 /// Platform-independent subset of file information to be stored in
 /// SQLite.
+///
+/// TODO: Restic makes a good case that ctime should also be included
+/// in this set. We should backfill.
+/// https://restic.readthedocs.io/en/latest/040_backup.html#file-change-detection
 #[derive(Debug, PartialEq)]
 pub struct FileInfo {
     /// 0 on Windows for now. May contain file_index() when the API is
