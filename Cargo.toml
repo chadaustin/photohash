@@ -2,7 +2,7 @@
 name = "photohash"
 version = "0.1.0"
 authors = ["Chad Austin <chad@chadaustin.me>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 
 [lib]
