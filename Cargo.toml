@@ -6,6 +6,7 @@ edition = "2021"
 build = "build.rs"
 license = "GPL-3.0"
 description = "Tool for detecting duplicate photos and diffing directories"
+repository = "https://github.com/chadaustin/photohash"
 
 [lib]
 name = "photohash"
