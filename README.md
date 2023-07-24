@@ -1,5 +1,8 @@
 # Building
 
+NOTE: Requires nightly Rust for
+`[iter_array_chunks](https://github.com/rust-lang/rust/issues/100450)`.
+
 ## Ubuntu
 
 ```
