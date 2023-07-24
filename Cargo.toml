@@ -7,7 +7,7 @@ build = "build.rs"
 license = "GPL-3.0"
 description = "Tool for detecting duplicate photos and diffing directories"
 repository = "https://github.com/chadaustin/photohash"
-keywords = ["jpeg", "heic", "perceptual hash"]
+keywords = ["jpeg", "heic", "perceptual", "hash"]
 categories = ["command-line-utilities", "multimedia::images"]
 
 [lib]
