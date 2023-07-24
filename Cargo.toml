@@ -32,7 +32,7 @@ inherits = "release"
 debug = true
 
 [build-dependencies]
-vcpkg = "*"
+vcpkg = "0"
 
 [dev-dependencies]
 criterion = { version = "0", features = ["html_reports"] }
@@ -42,36 +42,36 @@ name = "databasebench"
 harness = false
 
 [dependencies]
-anyhow = "*"
-async-std = { version = "*", features = ["unstable"] }
-blake3 = "*"
-blockhash = "*"
-chrono = "*"
-directories = "*"
-dunce = "*"
-kamadak-exif = "*"
-keepawake = "*"
-futures = "*"
-hex = "*"
-image = { version = "*", features = [] }
-image_hasher = "*"
-jwalk = "*"
-ntapi = "*"
-libheif-rs = "*"
-rayon = "*"
-rusqlite_migration = "*"
-self_cell = "*"
-static_assertions = "*"
-structopt = "*"
-thiserror = "*"
+anyhow = "1"
+async-std = { version = "1", features = ["unstable"] }
+blake3 = "1"
+blockhash = "0"
+chrono = "0"
+directories = "5"
+dunce = "1"
+kamadak-exif = "0"
+keepawake = "0"
+futures = "0"
+hex = "0"
+image = { version = "0", features = [] }
+image_hasher = "1"
+jwalk = "0"
+ntapi = "0"
+libheif-rs = "0"
+rayon = "1"
+rusqlite_migration = "1"
+self_cell = "1"
+static_assertions = "1"
+structopt = "0"
+thiserror = "1"
 tokio = { version = "1", features = ["full"] }
-turbojpeg = { version = "*", features = ["image"] }
+turbojpeg = { version = "0", features = ["image"] }
 walkdir = "2"
-wild = "*"
-winapi = { version = "*", features = ["heapapi"] }
+wild = "2"
+winapi = { version = "0", features = ["heapapi"] }
 
 [target.'cfg(windows)'.dependencies]
-rusqlite = { version = "*", features = ["bundled"] }
+rusqlite = { version = "0", features = ["bundled"] }
 
 [target.'cfg(not(windows))'.dependencies]
-rusqlite = "*"
+rusqlite = "0"
