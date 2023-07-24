@@ -3,6 +3,7 @@ name = "photohash"
 version = "0.1.0"
 authors = ["Chad Austin <chad@chadaustin.me>"]
 edition = "2021"
+rust = "1.70"
 build = "build.rs"
 license = "GPL-3.0"
 description = "Tool for detecting duplicate photos and diffing directories"
