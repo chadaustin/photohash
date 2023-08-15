@@ -6,7 +6,7 @@ NOTE: Requires nightly Rust for
 ## Ubuntu
 
 ```
-sudo apt install -y cmake nasm
+sudo apt install -y cmake nasm libsqlite3-dev
 
 sudo add-apt-repository ppa:strukturag/libheif
 sudo add-apt-repository ppa:strukturag/libde265
