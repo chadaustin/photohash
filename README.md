@@ -17,7 +17,8 @@ sudo apt install -y libheif-dev
 ## Windows
 
 ```
-vcpkg install libheif:x64-windows-static
+cargo install cargo-vcpkg
+cargo vcpkg build
 export VCPKGRS_DYNAMIC=1
 cargo build
 ```
