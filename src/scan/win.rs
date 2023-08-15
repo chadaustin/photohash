@@ -1,6 +1,5 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
-use crate::mpmc;
 use anyhow::Result;
 use ntapi::ntioapi::FileDirectoryInformation;
 use ntapi::ntioapi::NtCreateFile;
@@ -352,10 +351,10 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     })
 }
 
-pub fn windows_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+pub fn windows_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
 
-    let (meta_tx, meta_rx) = mpmc::unbounded();
+    let (meta_tx, meta_rx) = batch_channel::unbounded();
 
     thread::Builder::new()
         .name("winscan".to_string())

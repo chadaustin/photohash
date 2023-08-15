@@ -343,6 +343,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "604178f6c5c21f02dc555784810edfb88d34ac2c73b2eae109655649ee73ce3d"
 
 [[package]]
+name = "batch-channel"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0cdf047e9ad168af83e13eaf04125bb6f2c21d08cd273f57edff10ba4027a7a"
+
+[[package]]
 name = "bindgen"
 version = "0.63.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1861,10 +1867,11 @@ checksum = "9b2a4787296e9989611394c33f193f676704af1686e70b8f8033ab5ba9a35a94"
 
 [[package]]
 name = "photohash"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-std",
+ "batch-channel",
  "blake3",
  "blockhash",
  "chrono",

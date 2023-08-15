@@ -9,7 +9,6 @@ use futures::future::join_all;
 use photohash::database::Database;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
-use photohash::mpmc;
 use photohash::scan;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -143,8 +142,8 @@ impl JwalkParStat {
     async fn run(&self) -> Result<()> {
         let now = Instant::now();
 
-        let (path_tx, path_rx) = mpmc::unbounded();
-        let (meta_tx, meta_rx) = mpmc::unbounded();
+        let (path_tx, path_rx) = batch_channel::unbounded();
+        let (meta_tx, meta_rx) = batch_channel::unbounded();
 
         let path = self.path.clone();
         let sort = self.sort;
@@ -161,11 +160,11 @@ impl JwalkParStat {
                 }
                 cb.push(e.path());
                 if cb.len() == path_batch {
-                    cb = path_tx.send_many(cb).unwrap();
+                    cb = path_tx.send_vec(cb).unwrap();
                 }
             }
             if cb.len() > 0 {
-                path_tx.send_many(cb).unwrap();
+                path_tx.send_vec(cb).unwrap();
             }
         });
 
@@ -175,15 +174,14 @@ impl JwalkParStat {
             let batch = self.batch;
             tokio::spawn(async move {
                 loop {
-                    let paths = rx.recv_many(batch).await;
+                    let paths = rx.recv_batch(batch).await;
                     if paths.is_empty() {
                         return;
                     }
-                    tx.send_many(
+                    tx.send_iter(
                         paths
                             .into_iter()
-                            .map(std::fs::symlink_metadata)
-                            .collect::<Vec<_>>(),
+                            .map(std::fs::symlink_metadata),
                     )
                     .unwrap();
                 }
@@ -194,7 +192,7 @@ impl JwalkParStat {
 
         let mut stat_calls = 0;
         loop {
-            let metas = meta_rx.recv_many(self.batch).await;
+            let metas = meta_rx.recv_batch(self.batch).await;
             if metas.is_empty() {
                 break;
             }
@@ -238,7 +236,7 @@ impl Scan {
 
         let rx = scan(&[&self.path])?;
         loop {
-            let results = rx.recv_many(self.batch).await;
+            let results = rx.recv_batch(self.batch).await;
             if results.is_empty() {
                 break;
             }

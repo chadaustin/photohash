@@ -7,7 +7,6 @@ pub mod database;
 pub mod hash;
 pub mod iopool;
 pub mod model;
-pub mod mpmc;
 pub mod scan;
 
 pub use database::Database;

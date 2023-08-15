@@ -3,7 +3,6 @@
 
 use crate::model::FileInfo;
 use crate::model::IMPath;
-use crate::mpmc;
 use anyhow::Context;
 use anyhow::Result;
 use std::path::Path;
@@ -35,12 +34,12 @@ fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
 
-fn walkdir_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
-    let (tx, rx) = mpmc::unbounded();
+    let (tx, rx) = batch_channel::unbounded();
 
     rayon::spawn(move || {
         let mut tx = tx.batch(SERIAL_CHANNEL_BATCH);
@@ -102,11 +101,11 @@ fn walkdir_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileIn
 const PARALLEL_CHANNEL_BATCH: usize = 100;
 const CONCURRENCY: usize = 4;
 
-fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>> {
+fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
-    let (path_tx, path_rx) = mpmc::unbounded();
-    let (meta_tx, meta_rx) = mpmc::unbounded();
+    let (path_tx, path_rx) = batch_channel::unbounded();
+    let (meta_tx, meta_rx) = batch_channel::unbounded();
 
     for path in paths {
         let tx = path_tx.clone();
@@ -160,11 +159,11 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
         let tx = meta_tx.clone();
         tokio::spawn(async move {
             loop {
-                let paths = rx.recv_many(PARALLEL_CHANNEL_BATCH).await;
+                let paths = rx.recv_batch(PARALLEL_CHANNEL_BATCH).await;
                 if paths.is_empty() {
                     return;
                 }
-                if let Err(_) = tx.send_many(
+                if let Err(_) = tx.send_iter(
                     paths
                         .into_iter()
                         .map(|(p, result)| match result {
@@ -175,8 +174,7 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
                                 (p, metadata)
                             }
                             Err(e) => (p, Err(e)),
-                        })
-                        .collect::<Vec<_>>(),
+                        }),
                 ) {
                     // Receiver dropped; we can early-exit.
                     return;
@@ -193,7 +191,7 @@ fn jwalk_scan(paths: &[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo
 #[cfg(windows)]
 mod win;
 
-type ScanFn = fn(&[&Path]) -> Result<mpmc::Receiver<(IMPath, Result<FileInfo>)>>;
+type ScanFn = fn(&[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>>;
 
 #[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {
