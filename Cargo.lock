@@ -344,9 +344,9 @@ checksum = "414dcefbc63d77c526a76b3afcf6fbb9b5e2791c19c3aa2297733208750c6e53"
 
 [[package]]
 name = "batch-channel"
-version = "0.2.2"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dbcd6f6156c95e2327f21d96d1a52c7e5273888f01b3a13c792549de4aa6d77"
+checksum = "d1552ceca86bdc9e1dec2bda6ddcdd805cd0fe25a44c9706d43cec5902eed128"
 
 [[package]]
 name = "bindgen"
