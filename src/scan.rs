@@ -163,19 +163,15 @@ fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result
                 if paths.is_empty() {
                     return;
                 }
-                if let Err(_) = tx.send_iter(
-                    paths
-                        .into_iter()
-                        .map(|(p, result)| match result {
-                            Ok(()) => {
-                                let metadata = std::fs::symlink_metadata(&p)
-                                    .map(From::from)
-                                    .map_err(anyhow::Error::from);
-                                (p, metadata)
-                            }
-                            Err(e) => (p, Err(e)),
-                        }),
-                ) {
+                if let Err(_) = tx.send_iter(paths.into_iter().map(|(p, result)| match result {
+                    Ok(()) => {
+                        let metadata = std::fs::symlink_metadata(&p)
+                            .map(From::from)
+                            .map_err(anyhow::Error::from);
+                        (p, metadata)
+                    }
+                    Err(e) => (p, Err(e)),
+                })) {
                     // Receiver dropped; we can early-exit.
                     return;
                 }

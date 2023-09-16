@@ -351,7 +351,9 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
     })
 }
 
-pub fn windows_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
+pub fn windows_scan(
+    paths: &[&Path],
+) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
 
     let (meta_tx, meta_rx) = batch_channel::unbounded();

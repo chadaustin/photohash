@@ -178,12 +178,8 @@ impl JwalkParStat {
                     if paths.is_empty() {
                         return;
                     }
-                    tx.send_iter(
-                        paths
-                            .into_iter()
-                            .map(std::fs::symlink_metadata),
-                    )
-                    .unwrap();
+                    tx.send_iter(paths.into_iter().map(std::fs::symlink_metadata))
+                        .unwrap();
                 }
             });
         }
