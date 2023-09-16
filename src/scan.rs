@@ -41,7 +41,7 @@ fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Resu
     // crawl has gotten too far ahead.
     let (tx, rx) = batch_channel::unbounded();
 
-    rayon::spawn(move || {
+    tokio::spawn(async move {
         let mut tx = tx.batch(SERIAL_CHANNEL_BATCH);
 
         // TODO: walk each path in parallel.
@@ -109,7 +109,7 @@ fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result
 
     for path in paths {
         let tx = path_tx.clone();
-        rayon::spawn(move || {
+        tokio::spawn(async move {
             let mut tx = tx.batch(PARALLEL_CHANNEL_BATCH);
             // No same_file_system option. https://github.com/Byron/jwalk/issues/27
             for entry in jwalk::WalkDir::new(&path)
