@@ -5,6 +5,7 @@ use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
 use anyhow::Result;
+use futures::FutureExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -33,58 +34,59 @@ fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
  */
 
 const SERIAL_CHANNEL_BATCH: usize = 100;
+const SERIAL_CHANNEL_CAPACITY: usize = 10000;
 
 fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
-    let (tx, rx) = batch_channel::unbounded();
+    let (tx, rx) = batch_channel::bounded(SERIAL_CHANNEL_CAPACITY);
 
     tokio::spawn(async move {
-        let mut tx = tx.batch(SERIAL_CHANNEL_BATCH);
-
-        // TODO: walk each path in parallel.
-        for path in paths {
-            for entry in walkdir::WalkDir::new(path)
-                .follow_links(false)
-                .same_file_system(true)
-            {
-                let e = match entry {
-                    Ok(e) => e,
-                    Err(e) => {
-                        // If we have a path, propagate the error.
-                        if let Some(path) = e.path().and_then(|p| p.to_str()) {
-                            if let Err(_) = tx.send((path.to_string(), Err(e.into()))) {
-                                // Receivers dropped; we can stop.
-                                return;
+        tx.autobatch(SERIAL_CHANNEL_BATCH, |tx| {
+            async move {
+                // TODO: walk each path in parallel.
+                for path in paths {
+                    for entry in walkdir::WalkDir::new(path)
+                        .follow_links(false)
+                        .same_file_system(true)
+                    {
+                        let e = match entry {
+                            Ok(e) => e,
+                            Err(e) => {
+                                // If we have a path, propagate the error.
+                                if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                                    tx.send((path.to_string(), Err(e.into()))).await?;
+                                } else {
+                                    // No path or non-unicode path. Be conservative for now and panic.
+                                    // It would be unfortunate to delete records because a scan temporarily failed.
+                                    panic!("Unexpected error from walkdir: {}", e);
+                                }
+                                continue;
                             }
-                        } else {
-                            // No path or non-unicode path. Be conservative for now and panic.
-                            // It would be unfortunate to delete records because a scan temporarily failed.
-                            panic!("Unexpected error from walkdir: {}", e);
+                        };
+                        if !e.file_type().is_file() {
+                            continue;
                         }
-                        continue;
-                    }
-                };
-                if !e.file_type().is_file() {
-                    continue;
-                }
-                let Some(path) = e.path().to_str().map(String::from) else {
+                        let Some(path) = e.path().to_str().map(String::from) else {
                     // Skip non-unicode paths.
                     continue;
                 };
 
-                // The serial scan primarily exists because WSL1 fast-paths the
-                // readdir, serial stat access pattern. It's significantly faster
-                // than a parallel crawl and random access stat pattern.
-                let metadata = e.metadata().map_err(anyhow::Error::from);
-                if let Err(_) = tx.send((path, metadata.map(From::from))) {
-                    // Receivers dropped; we can stop.
-                    return;
+                        // The serial scan primarily exists because WSL1 fast-paths the
+                        // readdir, serial stat access pattern. It's significantly faster
+                        // than a parallel crawl and random access stat pattern.
+                        let metadata = e.metadata().map_err(anyhow::Error::from);
+                        tx.send((path, metadata.map(From::from))).await?;
+                    }
                 }
+                Ok(())
             }
-        }
+            .boxed()
+        })
+        .await
+        .unwrap_or(())
     });
 
     Ok(rx)
