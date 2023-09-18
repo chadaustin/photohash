@@ -9,6 +9,11 @@ use futures::FutureExt;
 use std::path::Path;
 use std::path::PathBuf;
 
+const BATCH_SIZE: usize = 100;
+const PATH_CHANNEL_CAPACITY: usize = 100000;
+const META_CHANNEL_CAPACITY: usize = 100000;
+const IO_CONCURRENCY: usize = 4;
+
 fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
     paths
         .iter()
@@ -33,61 +38,54 @@ fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
  * concurrency from IO concurrency.
  */
 
-const SERIAL_CHANNEL_BATCH: usize = 100;
-const SERIAL_CHANNEL_CAPACITY: usize = 10000;
-
 fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
-    let (tx, rx) = batch_channel::bounded(SERIAL_CHANNEL_CAPACITY);
+    let (tx, rx) = batch_channel::bounded(META_CHANNEL_CAPACITY);
 
-    tokio::spawn(async move {
-        tx.autobatch(SERIAL_CHANNEL_BATCH, |tx| {
-            async move {
-                // TODO: walk each path in parallel.
-                for path in paths {
-                    for entry in walkdir::WalkDir::new(path)
-                        .follow_links(false)
-                        .same_file_system(true)
-                    {
-                        let e = match entry {
-                            Ok(e) => e,
-                            Err(e) => {
-                                // If we have a path, propagate the error.
-                                if let Some(path) = e.path().and_then(|p| p.to_str()) {
-                                    tx.send((path.to_string(), Err(e.into()))).await?;
-                                } else {
-                                    // No path or non-unicode path. Be conservative for now and panic.
-                                    // It would be unfortunate to delete records because a scan temporarily failed.
-                                    panic!("Unexpected error from walkdir: {}", e);
-                                }
-                                continue;
+    tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, |tx| {
+        async move {
+            // TODO: walk each path in parallel.
+            for path in paths {
+                for entry in walkdir::WalkDir::new(path)
+                    .follow_links(false)
+                    .same_file_system(true)
+                {
+                    let e = match entry {
+                        Ok(e) => e,
+                        Err(e) => {
+                            // If we have a path, propagate the error.
+                            if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                                tx.send((path.to_string(), Err(e.into()))).await?;
+                            } else {
+                                // No path or non-unicode path. Be conservative for now and panic.
+                                // It would be unfortunate to delete records because a scan temporarily failed.
+                                panic!("Unexpected error from walkdir: {}", e);
                             }
-                        };
-                        if !e.file_type().is_file() {
                             continue;
                         }
-                        let Some(path) = e.path().to_str().map(String::from) else {
-                    // Skip non-unicode paths.
-                    continue;
-                };
-
-                        // The serial scan primarily exists because WSL1 fast-paths the
-                        // readdir, serial stat access pattern. It's significantly faster
-                        // than a parallel crawl and random access stat pattern.
-                        let metadata = e.metadata().map_err(anyhow::Error::from);
-                        tx.send((path, metadata.map(From::from))).await?;
+                    };
+                    if !e.file_type().is_file() {
+                        continue;
                     }
+                    let Some(path) = e.path().to_str().map(String::from) else {
+                            // Skip non-unicode paths.
+                            continue;
+                        };
+
+                    // The serial scan primarily exists because WSL1 fast-paths the
+                    // readdir, serial stat access pattern. It's significantly faster
+                    // than a parallel crawl and random access stat pattern.
+                    let metadata = e.metadata().map_err(anyhow::Error::from);
+                    tx.send((path, metadata.map(From::from))).await?;
                 }
-                Ok(())
             }
-            .boxed()
-        })
-        .await
-        .unwrap_or(())
-    });
+            Ok(())
+        }
+        .boxed()
+    }));
 
     Ok(rx)
 }
@@ -100,80 +98,77 @@ fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Resu
  * on Linux or macOS.
  */
 
-const PARALLEL_CHANNEL_BATCH: usize = 100;
-const CONCURRENCY: usize = 4;
-
 fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
-    let (path_tx, path_rx) = batch_channel::unbounded();
-    let (meta_tx, meta_rx) = batch_channel::unbounded();
+    let (path_tx, path_rx) = batch_channel::bounded(PATH_CHANNEL_CAPACITY);
+    let (meta_tx, meta_rx) = batch_channel::bounded(META_CHANNEL_CAPACITY);
 
     for path in paths {
         let tx = path_tx.clone();
-        tokio::spawn(async move {
-            let mut tx = tx.batch(PARALLEL_CHANNEL_BATCH);
-            // No same_file_system option. https://github.com/Byron/jwalk/issues/27
-            for entry in jwalk::WalkDir::new(&path)
-                .skip_hidden(false)
-                .sort(false)
-                .follow_links(false)
-                .parallelism(jwalk::Parallelism::RayonDefaultPool {
-                    busy_timeout: std::time::Duration::from_secs(300),
-                })
-            {
-                let e = match entry {
-                    Ok(e) => e,
-                    Err(e) => {
-                        // If we have a path, propagate the error.
-                        if let Some(path) = e.path().and_then(|p| p.to_str()) {
-                            if let Err(_) = tx.send((path.to_string(), Err(e.into()))) {
-                                // Receivers dropped; we can stop.
-                                return;
+        tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, |tx| {
+            async move {
+                // No same_file_system option. https://github.com/Byron/jwalk/issues/27
+                for entry in jwalk::WalkDir::new(&path)
+                    .skip_hidden(false)
+                    .sort(false)
+                    .follow_links(false)
+                    .parallelism(jwalk::Parallelism::RayonDefaultPool {
+                        busy_timeout: std::time::Duration::from_secs(300),
+                    })
+                {
+                    let e = match entry {
+                        Ok(e) => e,
+                        Err(e) => {
+                            // If we have a path, propagate the error.
+                            if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                                tx.send((path.to_string(), Err(e.into()))).await?;
+                            } else {
+                                // No path or non-unicode path. Be conservative for now and panic.
+                                // It would be unfortunate to delete records because a scan temporarily failed.
+                                panic!("Unexpected error from jwalk: {}", e);
                             }
-                        } else {
-                            // No path or non-unicode path. Be conservative for now and panic.
-                            // It would be unfortunate to delete records because a scan temporarily failed.
-                            panic!("Unexpected error from jwalk: {}", e);
+                            continue;
                         }
+                    };
+                    if !e.file_type().is_file() {
                         continue;
                     }
-                };
-                if !e.file_type().is_file() {
-                    continue;
-                }
-                let Some(path) = e.path().to_str().map(String::from) else {
+                    let Some(path) = e.path().to_str().map(String::from) else {
                     // Skip non-unicode paths.
                     continue;
                 };
 
-                if let Err(_) = tx.send((path, Ok(()))) {
-                    // Receivers dropped; we can stop.
-                    return;
+                    tx.send((path, Ok(()))).await?;
                 }
+                Ok(())
             }
-        });
+            .boxed()
+        }));
     }
     drop(path_tx);
 
-    for _ in 0..CONCURRENCY {
+    for _ in 0..IO_CONCURRENCY {
         let rx = path_rx.clone();
         let tx = meta_tx.clone();
         tokio::spawn(async move {
             loop {
-                let paths = rx.recv_batch(PARALLEL_CHANNEL_BATCH).await;
+                let paths = rx.recv_batch(BATCH_SIZE).await;
                 if paths.is_empty() {
                     return;
                 }
-                if let Err(_) = tx.send_iter(paths.into_iter().map(|(p, result)| match result {
-                    Ok(()) => {
-                        let metadata = std::fs::symlink_metadata(&p)
-                            .map(From::from)
-                            .map_err(anyhow::Error::from);
-                        (p, metadata)
-                    }
-                    Err(e) => (p, Err(e)),
-                })) {
+                if let Err(_) = tx
+                    .send_iter(paths.into_iter().map(|(p, result)| match result {
+                        Ok(()) => {
+                            let metadata = std::fs::symlink_metadata(&p)
+                                .map(From::from)
+                                .map_err(anyhow::Error::from);
+                            (p, metadata)
+                        }
+                        Err(e) => (p, Err(e)),
+                    }))
+                    .await
+                {
                     // Receiver dropped; we can early-exit.
                     return;
                 }

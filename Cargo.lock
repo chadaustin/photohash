@@ -344,9 +344,9 @@ checksum = "414dcefbc63d77c526a76b3afcf6fbb9b5e2791c19c3aa2297733208750c6e53"
 
 [[package]]
 name = "batch-channel"
-version = "0.3.3"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae2139712a194beb81d483c66233c3581560b9471973fd8ff37cf86ba0d48feb"
+checksum = "2293e4cb1397a34c0a02325881a3c9e28ea1d28e57e249daf14422069312e9e8"
 dependencies = [
  "futures-core",
 ]
