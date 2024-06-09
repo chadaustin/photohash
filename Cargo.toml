@@ -44,7 +44,7 @@ harness = false
 
 [dependencies]
 anyhow = "1"
-async-std = { version = "1", features = ["unstable"] }
+async-std = { version = "1.12", features = ["unstable"] }
 batch-channel = "0.3.6"
 blake3 = "1"
 blockhash = "0"
@@ -53,9 +53,9 @@ directories = "5"
 dunce = "1"
 kamadak-exif = "0"
 keepawake = "0"
-futures = "0"
+futures = "0.3"
 hex = "0"
-image = { version = "0", features = [] }
+image = { version = "0.24", features = [] }
 image_hasher = "1"
 jwalk = "0"
 ntapi = "0"
@@ -70,10 +70,10 @@ tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "sync"] }
 turbojpeg = { version = "0", features = ["image"] }
 walkdir = "2"
 wild = "2"
-winapi = { version = "0", features = ["heapapi"] }
+winapi = { version = "0.3", features = ["heapapi"] }
 
 [target.'cfg(windows)'.dependencies]
-rusqlite = { version = "0", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [target.'cfg(not(windows))'.dependencies]
-rusqlite = "0"
+rusqlite = "0.31"
