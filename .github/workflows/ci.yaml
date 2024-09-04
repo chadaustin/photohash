@@ -23,6 +23,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
-      - name: Install libheif
-        run: sudo apt install -y libheif-dev
+      - name: Install Ubuntu packages
+        run: sudo apt install -y libheif-dev nasm
       - run: cargo test
