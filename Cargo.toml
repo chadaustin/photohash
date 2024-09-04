@@ -43,32 +43,32 @@ name = "databasebench"
 harness = false
 
 [dependencies]
-anyhow = "1"
+anyhow = "1.0.65"
 async-std = { version = "1.12", features = ["unstable"] }
 batch-channel = "0.3.6"
 blake3 = "1"
-blockhash = "0"
+blockhash = "0.5.0"
 chrono = "0.4.38"
 directories = "5"
 dunce = "1.0.5"
 kamadak-exif = "0.5.5"
-keepawake = "0"
+keepawake = "0.4.5"
 futures = "0.3"
 hex = "0"
-image = { version = "0.24", features = [] }
+image = { version = "0.24.7", features = [] }
 image_hasher = "1"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
 ntapi = "0.4.1"
-libheif-rs = "0"
-rayon = "1"
+libheif-rs = "0.20.0"
+rayon = "1.10.0"
 rusqlite_migration = "1.2.0"
 self_cell = "1.0.4"
-static_assertions = "1"
+static_assertions = "1.1.0"
 structopt = "0.3.26"
-thiserror = "1"
+thiserror = "1.0.48"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "sync"] }
-turbojpeg = { version = "0", features = ["image"] }
+turbojpeg = { version = "0.5.4", features = ["image"] }
 walkdir = "2.5.0"
 wild = "2.2.1"
 winapi = { version = "0.3.9", features = ["heapapi"] }
