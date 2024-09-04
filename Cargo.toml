@@ -70,7 +70,7 @@ thiserror = "1"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "sync"] }
 turbojpeg = { version = "0", features = ["image"] }
 walkdir = "2"
-wild = "2"
+wild = "2.2.1"
 winapi = { version = "0.3", features = ["heapapi"] }
 
 [target.'cfg(windows)'.dependencies]
