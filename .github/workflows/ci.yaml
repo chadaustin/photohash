@@ -11,8 +11,9 @@ jobs:
       matrix:
         image:
           - ubuntu-latest
-          - macos-latest # ARM
-          - macos-13 # Intel
+          # TODO: Figure out how to install libheif on macOS.
+          # - macos-latest # ARM
+          # - macos-13 # Intel
           # Windows will require extra attention.
           # - windows-latest
 
@@ -23,6 +24,5 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install libheif
-        if: ${{ matrix.image=="ubuntu-latest" }}
         run: sudo apt install -y libheif-dev
       - run: cargo test
