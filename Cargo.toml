@@ -78,3 +78,6 @@ rusqlite = { version = "0.31.0", features = ["bundled"] }
 
 [target.'cfg(not(windows))'.dependencies]
 rusqlite = "0.31.0"
+
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+jemallocator = "0.5.4"

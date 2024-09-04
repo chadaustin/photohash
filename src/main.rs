@@ -9,6 +9,10 @@ use structopt::StructOpt;
 
 mod cmd;
 
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 const READ_SIZE: usize = 65536;
 
 async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
