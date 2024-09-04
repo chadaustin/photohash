@@ -57,11 +57,12 @@ futures = "0.3"
 hex = "0"
 image = { version = "0.24", features = [] }
 image_hasher = "1"
+itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0"
 ntapi = "0"
 libheif-rs = "0"
 rayon = "1"
-rusqlite_migration = "1"
+rusqlite_migration = "1.2.0"
 self_cell = "1"
 static_assertions = "1"
 structopt = "0"
@@ -73,7 +74,7 @@ wild = "2"
 winapi = { version = "0.3", features = ["heapapi"] }
 
 [target.'cfg(windows)'.dependencies]
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31.0", features = ["bundled"] }
 
 [target.'cfg(not(windows))'.dependencies]
-rusqlite = "0.31"
+rusqlite = "0.31.0"

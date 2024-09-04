@@ -234,7 +234,9 @@ impl Database {
         self.with_transaction(|_conn, stmt| {
             let mut results = Vec::with_capacity(paths.len());
 
-            let mut chunks = paths.iter().map(|path| path.as_ref()).array_chunks::<N>();
+            let mut chunks = itermore::IterArrayChunks::array_chunks::<N>(
+                paths.iter().map(|path| path.as_ref()),
+            );
             for chunk in chunks.by_ref() {
                 let i = results.len();
                 results.resize_with(results.len() + N, || None);
