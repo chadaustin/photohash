@@ -59,7 +59,7 @@ image = { version = "0.24", features = [] }
 image_hasher = "1"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0"
-ntapi = "0"
+ntapi = "0.4.1"
 libheif-rs = "0"
 rayon = "1"
 rusqlite_migration = "1.2.0"
