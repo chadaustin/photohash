@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         image:
-          - ubuntu-latest
+          - ubuntu-24.04
           # TODO: Figure out how to install libheif on macOS.
           # - macos-latest # ARM
           # - macos-13 # Intel
