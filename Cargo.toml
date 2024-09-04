@@ -55,8 +55,8 @@ kamadak-exif = "0.5.5"
 keepawake = "0.4.5"
 futures = "0.3"
 hex = "0"
-image = { version = "0.24.7", features = [] }
-image_hasher = "1"
+image = { version = "0.25.2", features = [] }
+image_hasher = "2.0.0"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
 ntapi = "0.4.1"
