@@ -65,7 +65,7 @@ rayon = "1"
 rusqlite_migration = "1.2.0"
 self_cell = "1.0.4"
 static_assertions = "1"
-structopt = "0"
+structopt = "0.3.26"
 thiserror = "1"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "sync"] }
 turbojpeg = { version = "0", features = ["image"] }
