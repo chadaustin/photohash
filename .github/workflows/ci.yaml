@@ -1,0 +1,26 @@
+on: [push, pull_request]
+
+name: CI
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        image:
+          - ubuntu-latest
+          - macos-latest # ARM
+          - macos-13 # Intel
+          # Windows will require extra attention.
+          # - windows-latest
+
+    runs-on: ${{ matrix.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - run: cargo test
