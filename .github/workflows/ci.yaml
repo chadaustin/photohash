@@ -23,5 +23,6 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install libheif
+        if: ${{ matrix.image=="ubuntu-latest" }}
         run: sudo apt install -y libheif-dev
       - run: cargo test
