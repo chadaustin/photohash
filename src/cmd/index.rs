@@ -42,7 +42,7 @@ impl Index {
 
         let mut metadata_rx = do_index(&db, &dirs)?;
 
-        let _awake = match keepawake::Builder::new()
+        let _awake = match keepawake::Builder::default()
             .display(false)
             .idle(true)
             .sleep(true)
