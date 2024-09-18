@@ -20,19 +20,22 @@ struct HeifPerceptualImage<'a> {
 }
 
 impl blockhash::Image for HeifPerceptualImage<'_> {
-    type Pixel = blockhash::Rgb<u8>;
+    const MAX_BRIGHTNESS: u32 = 255 * 3;
 
     fn dimensions(&self) -> (u32, u32) {
         (self.plane.width, self.plane.height)
     }
 
-    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+    fn brightness(&self, x: u32, y: u32) -> u32 {
         let offset = self.plane.stride * y as usize + 3 * x as usize;
-        let data = &self.plane.data;
+        let data: &[u8] = self.plane.data;
         if offset + 2 >= data.len() {
             eprintln!("out of bound access x={}, y={}", x, y);
         }
-        blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]])
+        let r: u32 = data[offset] as _;
+        let g: u32 = data[offset + 1] as _;
+        let b: u32 = data[offset + 2] as _;
+        r + g + b
     }
 }
 

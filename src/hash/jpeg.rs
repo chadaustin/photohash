@@ -21,16 +21,19 @@ struct JpegPerceptualImage<'a> {
 }
 
 impl blockhash::Image for JpegPerceptualImage<'_> {
-    type Pixel = blockhash::Rgb<u8>;
+    const MAX_BRIGHTNESS: u32 = 255 * 3;
 
     fn dimensions(&self) -> (u32, u32) {
         (self.image.width as u32, self.image.height as u32)
     }
 
-    fn get_pixel(&self, x: u32, y: u32) -> Self::Pixel {
+    fn brightness(&self, x: u32, y: u32) -> u32 {
         let offset = self.image.pitch * y as usize + 3 * x as usize;
-        let data = &self.image.pixels;
-        blockhash::Rgb([data[offset], data[offset + 1], data[offset + 2]])
+        let data: &[u8] = &self.image.pixels;
+        let r: u32 = data[offset] as _;
+        let g: u32 = data[offset + 1] as _;
+        let b: u32 = data[offset + 2] as _;
+        r + g + b
     }
 }
 

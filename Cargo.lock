@@ -552,11 +552,11 @@ dependencies = [
 
 [[package]]
 name = "blockhash"
-version = "0.5.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "526db6d2e8787dd4ca85209be4fb7d43d6ca5d5d6ac218242431389d9fa90ad5"
+checksum = "e4c544959f633e4ac1f04f841f5a1e1d12a0cfb787b9c1475f3f78eaf1bc1c2e"
 dependencies = [
- "image 0.24.9",
+ "image",
 ]
 
 [[package]]
@@ -1513,24 +1513,6 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "image"
-version = "0.24.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5690139d2f55868e080017335e4b94cb7414274c74f1669c84fb5feba2c9f69d"
-dependencies = [
- "bytemuck",
- "byteorder",
- "color_quant",
- "exr",
- "gif",
- "jpeg-decoder",
- "num-traits",
- "png",
- "qoi",
- "tiff",
-]
-
-[[package]]
-name = "image"
 version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99314c8a2152b8ddb211f924cdae532d8c5e4c8bb54728e12fff1b0cd5963a10"
@@ -1569,7 +1551,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481465fe767d92494987319b0b447a5829edf57f09c52bf8639396abaaeaf78"
 dependencies = [
  "base64",
- "image 0.25.2",
+ "image",
  "rustdct",
  "serde",
  "transpose",
@@ -1710,9 +1692,6 @@ name = "jpeg-decoder"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5d4a7da358eff58addd2877a45865158f0d78c911d43a5784ceb7bbf52833b0"
-dependencies = [
- "rayon",
-]
 
 [[package]]
 name = "js-sys"
@@ -2164,7 +2143,7 @@ dependencies = [
  "dunce",
  "futures",
  "hex",
- "image 0.25.2",
+ "image",
  "image_hasher",
  "itermore",
  "jemallocator",
@@ -3156,7 +3135,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b72653c4d8f295945ea47c1782cb640f7268f52232b7925f9a3589b971d786f"
 dependencies = [
- "image 0.25.2",
+ "image",
  "libc",
  "thiserror",
  "turbojpeg-sys",
