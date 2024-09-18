@@ -50,10 +50,7 @@ pub async fn compute_image_hashes(
     if USE_IMAGE_HASHER_BLOCKHASH {
         let image: image::RgbImage = if transform != TransformOp::None {
             let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform {
-                    op: transform,
-                    ..Default::default()
-                },
+                &turbojpeg::Transform::op(transform),
                 &file_contents,
             )
             .context(TRANSFORM_ERROR)?;
@@ -79,10 +76,7 @@ pub async fn compute_image_hashes(
     } else {
         let image = if transform != TransformOp::None {
             let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform {
-                    op: transform,
-                    ..Default::default()
-                },
+                &turbojpeg::Transform::op(transform),
                 &file_contents,
             )
             .context(TRANSFORM_ERROR)
@@ -160,10 +154,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform {
-                    op: turbojpeg::TransformOp::Rot90,
-                    ..Default::default()
-                },
+                &turbojpeg::Transform::op(turbojpeg::TransformOp::Rot90),
                 &jd90,
             )
             .context(TRANSFORM_ERROR)?;
@@ -173,10 +164,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform {
-                    op: turbojpeg::TransformOp::Rot180,
-                    ..Default::default()
-                },
+                &turbojpeg::Transform::op(turbojpeg::TransformOp::Rot180),
                 &jd180,
             )
             .context(TRANSFORM_ERROR)?;
@@ -186,10 +174,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform {
-                    op: turbojpeg::TransformOp::Rot270,
-                    ..Default::default()
-                },
+                &turbojpeg::Transform::op(turbojpeg::TransformOp::Rot270),
                 &jd270,
             )
             .context(TRANSFORM_ERROR)?;
