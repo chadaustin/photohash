@@ -60,7 +60,7 @@ image_hasher = "2.0.0"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
 ntapi = "0.4.1"
-libheif-rs = "1.0.2"
+libheif-rs = "0.20.0"
 rayon = "1.10.0"
 rusqlite_migration = "1.2.0"
 self_cell = "1.0.4"

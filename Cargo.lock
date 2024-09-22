@@ -99,7 +99,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38f109ee76f68b4767848cb5dc93bfcc7c425deca849c4c81fa11cdce525e3d2"
 dependencies = [
  "apple-sdk",
- "bindgen 0.63.0",
+ "bindgen",
  "derive_more",
  "regex",
  "serde",
@@ -501,29 +501,6 @@ dependencies = [
  "rustc-hash",
  "shlex",
  "syn 1.0.109",
- "which",
-]
-
-[[package]]
-name = "bindgen"
-version = "0.69.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
-dependencies = [
- "bitflags 2.6.0",
- "cexpr",
- "clang-sys",
- "itertools 0.12.1",
- "lazy_static",
- "lazycell",
- "log",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "syn 2.0.77",
  "which",
 ]
 
@@ -1805,9 +1782,9 @@ dependencies = [
 
 [[package]]
 name = "libheif-rs"
-version = "1.0.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40c32c0a0c970782707070f11c8612bced800b916af4ddaf6229161dc3ceb907"
+checksum = "58aadeecb2ab1815aecfa20fd5f9905a9e4d90884d9d8b63759c53edf0ab9ad3"
 dependencies = [
  "enumn",
  "four-cc",
@@ -1817,15 +1794,13 @@ dependencies = [
 
 [[package]]
 name = "libheif-sys"
-version = "2.1.1+1.17.4"
+version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f60b29be1ef3ab2aba61344f09a18c3edf552bf4f9fbec9bd68b9ea6f98e71f8"
+checksum = "2fec9617ceb95892391fba66dc1d559b3b15997844f5d36b17cb96ed86e0551c"
 dependencies = [
- "bindgen 0.69.4",
  "libc",
  "pkg-config",
  "vcpkg",
- "walkdir",
 ]
 
 [[package]]
@@ -2319,16 +2294,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77957b295656769bb8ad2b6a6b09d897d94f05c41b069aede1fcdaa675eaea04"
 dependencies = [
  "zerocopy",
-]
-
-[[package]]
-name = "prettyplease"
-version = "0.2.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479cf940fbbb3426c32c5d5176f62ad57549a0bb84773423ba8be9d089f5faba"
-dependencies = [
- "proc-macro2",
- "syn 2.0.77",
 ]
 
 [[package]]
