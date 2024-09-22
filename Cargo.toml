@@ -23,7 +23,7 @@ path = "src/main.rs"
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
-rev = "662dbb50e63af15baa2909b7eac5b1b87e86a0aa"
+rev = "7618666e79df4aca28a6d6343492f4b8af740e38"
 dependencies = [
     "libheif:x64-windows",
 ]
@@ -60,7 +60,7 @@ image_hasher = "2.0.0"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
 ntapi = "0.4.1"
-libheif-rs = "0.20.0"
+libheif-rs = { version = "1.0.2", default-features = false }
 rayon = "1.10.0"
 rusqlite_migration = "1.2.0"
 self_cell = "1.0.4"
