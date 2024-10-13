@@ -71,9 +71,9 @@ fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Resu
                         continue;
                     }
                     let Some(path) = e.path().to_str().map(String::from) else {
-                            // Skip non-unicode paths.
-                            continue;
-                        };
+                        // Skip non-unicode paths.
+                        continue;
+                    };
 
                     // The serial scan primarily exists because WSL1 fast-paths the
                     // readdir, serial stat access pattern. It's significantly faster
@@ -135,9 +135,9 @@ fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result
                         continue;
                     }
                     let Some(path) = e.path().to_str().map(String::from) else {
-                    // Skip non-unicode paths.
-                    continue;
-                };
+                        // Skip non-unicode paths.
+                        continue;
+                    };
 
                     tx.send((path, Ok(()))).await?;
                 }

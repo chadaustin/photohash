@@ -49,11 +49,9 @@ pub async fn compute_image_hashes(
 
     if USE_IMAGE_HASHER_BLOCKHASH {
         let image: image::RgbImage = if transform != TransformOp::None {
-            let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform::op(transform),
-                &file_contents,
-            )
-            .context(TRANSFORM_ERROR)?;
+            let jpeg_data =
+                turbojpeg::transform(&turbojpeg::Transform::op(transform), &file_contents)
+                    .context(TRANSFORM_ERROR)?;
             turbojpeg::decompress_image(&jpeg_data)
                 .context("decompress_image")
                 .map_err(unsupported_photo(path))?
@@ -75,12 +73,10 @@ pub async fn compute_image_hashes(
         })
     } else {
         let image = if transform != TransformOp::None {
-            let jpeg_data = turbojpeg::transform(
-                &turbojpeg::Transform::op(transform),
-                &file_contents,
-            )
-            .context(TRANSFORM_ERROR)
-            .map_err(unsupported_photo(path))?;
+            let jpeg_data =
+                turbojpeg::transform(&turbojpeg::Transform::op(transform), &file_contents)
+                    .context(TRANSFORM_ERROR)
+                    .map_err(unsupported_photo(path))?;
             turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
                 .context(DECOMPRESS_ERROR)
                 .map_err(unsupported_photo(path))?
