@@ -1,5 +1,6 @@
 use crate::compute_blake3;
 use anyhow::Result;
+use clap::Args;
 use hex::ToHex;
 use photohash::hash;
 use photohash::model::ContentMetadata;
@@ -13,7 +14,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use structopt::StructOpt;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
@@ -22,10 +22,10 @@ use tokio::task::JoinHandle;
 const RESULT_CHANNEL_SIZE: usize = 8;
 const TRACE_INVALID_PHOTOS: bool = false;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "index", about = "Scan directories and update the index")]
+#[derive(Args)]
+#[command(name = "index", about = "Scan directories and update the index")]
 pub struct Index {
-    #[structopt(parse(from_os_str), required(true))]
+    #[arg(required(true))]
     dirs: Vec<PathBuf>,
 }
 

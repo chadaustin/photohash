@@ -1,17 +1,17 @@
 use crate::cmd::index::do_index;
 use anyhow::Result;
+use clap::Args;
 use photohash::hash;
 use photohash::Database;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::vec::Vec;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "broken", about = "List all image files that cannot be decoded")]
+#[derive(Debug, Args)]
+#[command(name = "broken", about = "List all image files that cannot be decoded")]
 pub struct Broken {
-    #[structopt(parse(from_os_str), required(true))]
+    #[arg(required = true)]
     dirs: Vec<PathBuf>,
 }
 

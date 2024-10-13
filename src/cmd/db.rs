@@ -2,14 +2,15 @@
 use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
+use clap::Args;
+use clap::Subcommand;
 use photohash::database;
 #[cfg(not(windows))]
 use std::os::unix::process::CommandExt;
 use std::process::Command;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "path", about = "Print database location")]
+#[derive(Debug, Args)]
+#[command(name = "path", about = "Print database location")]
 pub struct DbPath {}
 
 impl DbPath {
@@ -19,8 +20,8 @@ impl DbPath {
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "open", about = "Interactively explore database")]
+#[derive(Debug, Args)]
+#[command(name = "open", about = "Interactively explore database")]
 pub struct DbOpen {}
 
 impl DbOpen {
@@ -46,12 +47,12 @@ impl DbOpen {
     }
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "db", about = "Database administration")]
+#[derive(Debug, Subcommand)]
+#[command(name = "db", about = "Database administration")]
 pub enum Db {
-    #[structopt(name = "path")]
+    #[command(name = "path")]
     DbPath(DbPath),
-    #[structopt(name = "open")]
+    #[command(name = "open")]
     DbOpen(DbOpen),
 }
 

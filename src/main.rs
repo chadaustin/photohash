@@ -1,11 +1,11 @@
 #![allow(clippy::redundant_pattern_matching)]
 
 use anyhow::Result;
+use clap::Parser;
 use photohash::iopool;
 use photohash::model::Hash32;
 use std::io::Read;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 mod cmd;
 
@@ -34,8 +34,15 @@ async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
     .await
 }
 
+#[derive(Parser)]
+#[command(name = "photohash", about = "Index your files", version)]
+struct Args {
+    #[command(subcommand)]
+    command: cmd::MainCommand,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = crate::cmd::MainCommand::from_iter(wild::args_os());
-    opt.run().await
+    let opt = Args::parse_from(wild::args_os());
+    opt.command.run().await
 }

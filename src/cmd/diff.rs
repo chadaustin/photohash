@@ -1,5 +1,6 @@
 use crate::cmd::index;
 use anyhow::Result;
+use clap::Args;
 use photohash::model::Hash32;
 use photohash::model::IMPath;
 use photohash::Database;
@@ -10,23 +11,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::vec::Vec;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "diff", about = "List files missing in destination")]
+#[derive(Debug, Args)]
+#[command(name = "diff", about = "List files missing in destination")]
 pub struct Diff {
     /// Disregard perceptual hashes and only list files whose exact contents aren't in destination
-    #[structopt(long)]
+    #[arg(long)]
     exact: bool,
 
     /// For all files that exist in destination, display corresponding paths
-    #[structopt(long)]
+    #[arg(long)]
     matches: bool,
 
-    #[structopt(parse(from_os_str))]
     src: PathBuf,
 
-    #[structopt(parse(from_os_str), required(true))]
+    #[arg(required = true)]
     dests: Vec<PathBuf>,
 }
 

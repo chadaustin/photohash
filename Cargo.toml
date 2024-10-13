@@ -49,6 +49,7 @@ batch-channel = "0.3.6"
 blake3 = "1"
 blockhash = "1.0.0"
 chrono = "0.4.38"
+clap = { version = "4.5.20", features = ["derive"] }
 directories = "5"
 dunce = "1.0.5"
 kamadak-exif = "0.5.5"
@@ -65,7 +66,6 @@ rayon = "1.10.0"
 rusqlite_migration = "1.2.0"
 self_cell = "1.0.4"
 static_assertions = "1.1.0"
-structopt = "0.3.26"
 thiserror = "1.0.48"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "sync"] }
 turbojpeg = { version = "1.1.1", features = ["image"] }

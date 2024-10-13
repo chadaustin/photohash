@@ -5,6 +5,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::Local;
+use clap::Args;
+use clap::Subcommand;
 use futures::future::join_all;
 use photohash::database::Database;
 use photohash::model::FileInfo;
@@ -16,10 +18,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "benchmark", about = "Benchmark directory scans")]
+#[derive(Subcommand)]
+#[command(name = "benchmark", about = "Benchmark directory scans")]
 pub enum Benchmark {
     Walkdir(Walkdir),
     Jwalk(Jwalk),
@@ -42,11 +43,10 @@ impl Benchmark {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct Walkdir {
-    #[structopt(long)]
+    #[arg(long)]
     stat: bool,
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
 }
 
@@ -78,15 +78,14 @@ impl Walkdir {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct Jwalk {
-    #[structopt(long)]
+    #[arg(long)]
     stat: bool,
-    #[structopt(long)]
+    #[arg(long)]
     bypath: bool,
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
-    #[structopt(long)]
+    #[arg(long)]
     sort: bool,
 }
 
@@ -124,17 +123,16 @@ impl Jwalk {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct JwalkParStat {
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
-    #[structopt(long)]
+    #[arg(long)]
     sort: bool,
-    #[structopt(long, default_value = "4")]
+    #[arg(long, default_value_t = 4)]
     threads: usize,
-    #[structopt(long, default_value = "100")]
+    #[arg(long, default_value_t = 100)]
     path_batch: usize,
-    #[structopt(long, default_value = "100")]
+    #[arg(long, default_value_t = 100)]
     batch: usize,
 }
 
@@ -201,13 +199,12 @@ impl JwalkParStat {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct Scan {
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
-    #[structopt(long, default_value = "1")]
+    #[arg(long, default_value_t = 1)]
     batch: usize,
-    #[structopt(long)]
+    #[arg(long)]
     scanner: Option<String>,
 }
 
@@ -248,12 +245,11 @@ impl Scan {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct Index {
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
 
-    #[structopt(long)]
+    #[arg(long)]
     real_db: bool,
 }
 
@@ -281,9 +277,8 @@ impl Index {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub struct Validate {
-    #[structopt(parse(from_os_str))]
     path: PathBuf,
 }
 

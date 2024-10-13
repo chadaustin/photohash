@@ -1,7 +1,7 @@
 use anyhow::Result;
+use clap::Args;
 use std::path::Path;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
 fn read_exif_from_jpeg(path: &Path) -> Result<exif::Exif> {
     let file = std::fs::File::open(path)?;
@@ -10,10 +10,10 @@ fn read_exif_from_jpeg(path: &Path) -> Result<exif::Exif> {
     Ok(reader.read_from_container(&mut std::io::BufReader::new(&file))?)
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Print EXIF data for a file")]
+#[derive(Debug, Args)]
+#[command(about = "Print EXIF data for a file")]
 pub struct Exif {
-    #[structopt(required(true))]
+    #[arg(required = true)]
     paths: Vec<PathBuf>,
 }
 

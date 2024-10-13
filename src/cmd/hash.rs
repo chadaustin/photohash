@@ -1,14 +1,14 @@
+use clap::Args;
 use hex::ToHex;
 use photohash::hash::compute_image_hashes;
 use photohash::model;
 use std::fmt::Display;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Manually display hashes for specific files")]
+#[derive(Debug, Args)]
+#[command(about = "Manually display hashes for specific files")]
 pub struct Hash {
-    #[structopt(required(true))]
+    #[arg(required = true)]
     files: Vec<PathBuf>,
 }
 

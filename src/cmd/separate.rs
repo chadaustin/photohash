@@ -1,6 +1,8 @@
 use crate::cmd::diff::compute_difference;
 use anyhow::bail;
 use anyhow::Result;
+use clap::Args;
+use clap::ValueEnum;
 use photohash::Database;
 use std::fmt::Display;
 use std::path::Path;
@@ -9,31 +11,29 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::vec::Vec;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "separate", about = "Separate files missing in destination")]
+#[derive(Args)]
+#[command(name = "separate", about = "Separate files missing in destination")]
 pub struct Separate {
-    #[structopt(parse(from_os_str))]
     src: PathBuf,
 
-    #[structopt(parse(from_os_str), required(true))]
+    #[arg(required = true)]
     dests: Vec<PathBuf>,
 
     /// Disregard perceptual hashes and only list files whose exact contents aren't in destination
-    #[structopt(long)]
+    #[arg(long)]
     exact: bool,
 
     /// Create hard links to files missing in destination
-    #[structopt(long)]
+    #[arg(long)]
     link: Option<PathBuf>,
 
     /// Move files missing in destination
-    #[structopt(long)]
+    #[arg(long)]
     r#move: Option<PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug, StructOpt)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum Mode {
     Link,
     Move,

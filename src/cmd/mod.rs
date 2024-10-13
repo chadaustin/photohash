@@ -1,7 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
 use anyhow::Result;
-use structopt::StructOpt;
+use clap::Subcommand;
 
 mod benchmark;
 mod broken;
@@ -12,11 +12,12 @@ mod hash;
 mod index;
 mod separate;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "imagehash", about = "Index your files")]
+#[derive(Subcommand)]
 pub enum MainCommand {
+    #[command(subcommand)]
     Benchmark(benchmark::Benchmark),
     Broken(broken::Broken),
+    #[command(subcommand)]
     Db(db::Db),
     Diff(diff::Diff),
     Exif(exif::Exif),
