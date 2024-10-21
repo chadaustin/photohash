@@ -140,7 +140,7 @@ impl JwalkParStat {
     async fn run(&self) -> Result<()> {
         let now = Instant::now();
 
-        let (path_tx, path_rx) = batch_channel::unbounded();
+        let (path_tx, path_rx) = batch_channel::unbounded_sync();
         let (meta_tx, meta_rx) = batch_channel::unbounded();
 
         let path = self.path.clone();
@@ -167,8 +167,8 @@ impl JwalkParStat {
         });
 
         for _ in 0..self.threads {
-            let rx = path_rx.clone();
-            let tx = meta_tx.clone();
+            let rx = path_rx.clone().into_async();
+            let tx = meta_tx.clone().into_sync();
             let batch = self.batch;
             tokio::spawn(async move {
                 loop {

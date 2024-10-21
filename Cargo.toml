@@ -45,7 +45,7 @@ harness = false
 [dependencies]
 anyhow = "1.0.65"
 async-std = { version = "1.12", features = ["unstable"] }
-batch-channel = "0.3.6"
+batch-channel = "0.4.1"
 blake3 = "1"
 blockhash = "1.0.0"
 chrono = "0.4.38"
