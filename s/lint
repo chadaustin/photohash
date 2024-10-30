@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+cd "${BASH_SOURCE%/*}"/..
+
+cargo +nightly fmt
+cargo clippy
