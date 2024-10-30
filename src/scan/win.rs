@@ -356,7 +356,7 @@ pub fn windows_scan(
 ) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
 
-    let (meta_tx, meta_rx) = batch_channel::unbounded();
+    let (meta_tx, meta_rx) = batch_channel::unbounded_sync();
 
     thread::Builder::new()
         .name("winscan".to_string())
@@ -397,18 +397,20 @@ pub fn windows_scan(
                         dirs_to_add.push((Some(child), child_full_path));
                     } else if let Some(utf8_full_path) = child_full_path.to_str() {
                         // TODO: return on Err?
-                        _ = meta_tx.send((
-                            utf8_full_path.to_string(),
-                            Ok(FileInfo {
-                                // TODO: We do technically have the
-                                // inode number if we call
-                                // NtQueryDirectoryFileEx with
-                                // FileIdBothDirectoryInformation.
-                                inode: 0,
-                                size: e.size,
-                                mtime: e.mtime(),
-                            }),
-                        ));
+                        meta_tx
+                            .send((
+                                utf8_full_path.to_string(),
+                                Ok(FileInfo {
+                                    // TODO: We do technically have the
+                                    // inode number if we call
+                                    // NtQueryDirectoryFileEx with
+                                    // FileIdBothDirectoryInformation.
+                                    inode: 0,
+                                    size: e.size,
+                                    mtime: e.mtime(),
+                                }),
+                            ))
+                            .expect("failed to send");
                     }
                 }
 
@@ -419,5 +421,5 @@ pub fn windows_scan(
         })
         .unwrap();
 
-    Ok(meta_rx)
+    Ok(meta_rx.into_async())
 }
