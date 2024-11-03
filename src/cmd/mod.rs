@@ -8,6 +8,7 @@ mod broken;
 mod db;
 mod diff;
 mod exif;
+mod find;
 mod hash;
 mod index;
 mod separate;
@@ -21,6 +22,7 @@ pub enum MainCommand {
     Db(db::Db),
     Diff(diff::Diff),
     Exif(exif::Exif),
+    Find(find::Find),
     Hash(hash::Hash),
     Index(index::Index),
     Separate(separate::Separate),
@@ -34,6 +36,7 @@ impl MainCommand {
             MainCommand::Db(cmd) => cmd.run().await,
             MainCommand::Diff(cmd) => cmd.run().await,
             MainCommand::Exif(cmd) => cmd.run().await,
+            MainCommand::Find(cmd) => cmd.run().await,
             MainCommand::Hash(cmd) => cmd.run().await,
             MainCommand::Index(cmd) => cmd.run().await,
             MainCommand::Separate(cmd) => cmd.run().await,

@@ -7,6 +7,7 @@ use photohash::Database;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -111,6 +112,56 @@ impl Diff {
 }
 
 #[derive(Default)]
+pub struct DestinationIndex {
+    // blake3 -> {path}
+    pub by_contents: HashMap<Hash32, HashSet<IMPath>>,
+    // jpegrothash -> {path}
+    pub by_jpegrothash: HashMap<Hash32, HashSet<IMPath>>,
+    // blockhash256 -> {path}
+    pub by_blockhash: HashMap<Hash32, HashSet<IMPath>>,
+}
+
+pub async fn index_destination(
+    db: &Arc<Mutex<Database>>,
+    dests: &[&Path],
+) -> Result<DestinationIndex> {
+    let mut index = DestinationIndex::default();
+
+    eprint!("scanning destination...");
+    let mut dots = Dots::new();
+    let mut dst_rx = index::do_index(db, dests)?;
+    while let Some(pfr_future) = dst_rx.recv().await {
+        dots.increment();
+
+        let pfr = pfr_future.await??;
+        let path = &pfr.path;
+
+        index
+            .by_contents
+            .entry(pfr.content_metadata.blake3)
+            .or_default()
+            .insert(path.clone());
+        if let Some(rh) = pfr.jpegrothash() {
+            index
+                .by_jpegrothash
+                .entry(*rh)
+                .or_default()
+                .insert(path.clone());
+        }
+        if let Some(bh) = pfr.blockhash256() {
+            index
+                .by_blockhash
+                .entry(*bh)
+                .or_default()
+                .insert(path.clone());
+        }
+    }
+    eprintln!();
+
+    Ok(index)
+}
+
+#[derive(Default)]
 pub struct Differences {
     pub missing: Vec<IMPath>,
 
@@ -130,41 +181,15 @@ pub async fn compute_difference(
     // incrementally display results.
     let mut src_rx = index::do_index(db, &[&src])?;
 
-    // blake3 -> {path}
-    let mut by_contents: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
-    // jpegrothash -> {path}
-    let mut by_jpegrothash: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
-    // blockhash256 -> {path}
-    let mut by_blockhash: HashMap<Hash32, HashSet<IMPath>> = HashMap::new();
-
     // Scan the destination(s) and build hash tables.
-    eprint!("scanning destination...");
-    let mut dots = Dots::new();
-    let mut dst_rx = index::do_index(db, &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>())?;
-    while let Some(pfr_future) = dst_rx.recv().await {
-        dots.increment();
-
-        let pfr = pfr_future.await??;
-        let path = &pfr.path;
-
-        by_contents
-            .entry(pfr.content_metadata.blake3)
-            .or_default()
-            .insert(path.clone());
-        if let Some(rh) = pfr.jpegrothash() {
-            by_jpegrothash.entry(*rh).or_default().insert(path.clone());
-        }
-        if let Some(bh) = pfr.blockhash256() {
-            by_blockhash.entry(*bh).or_default().insert(path.clone());
-        }
-    }
-    eprintln!();
+    let index =
+        index_destination(db, &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>()).await?;
 
     let mut differences = Differences::default();
     while let Some(pfr_future) = src_rx.recv().await {
         let pfr = pfr_future.await??;
         let (path, blake3) = (&pfr.path, pfr.content_metadata.blake3);
-        if let Some(paths) = by_contents.get(&blake3) {
+        if let Some(paths) = index.by_contents.get(&blake3) {
             differences
                 .matches_by_contents
                 .entry(path.clone())
@@ -176,7 +201,7 @@ pub async fn compute_difference(
         if !exact {
             if let Some(mut paths) = pfr
                 .jpegrothash()
-                .and_then(|rh| by_jpegrothash.get(rh))
+                .and_then(|rh| index.by_jpegrothash.get(rh))
                 .map(|paths| paths.clone().into_iter().collect())
             {
                 differences
@@ -188,7 +213,7 @@ pub async fn compute_difference(
             }
             if let Some(mut paths) = pfr
                 .blockhash256()
-                .and_then(|bh| by_blockhash.get(bh))
+                .and_then(|bh| index.by_blockhash.get(bh))
                 .map(|paths| paths.clone().into_iter().collect())
             {
                 differences
