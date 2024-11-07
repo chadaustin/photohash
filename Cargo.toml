@@ -52,7 +52,7 @@ chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
 directories = "5"
 dunce = "1.0.5"
-kamadak-exif = "0.5.5"
+kamadak-exif = "0.6.1"
 keepawake = "0.5.1"
 futures = "0.3"
 hex = "0"
