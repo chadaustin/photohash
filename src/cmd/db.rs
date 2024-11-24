@@ -1,7 +1,6 @@
 #[cfg(not(unix))]
 use anyhow::anyhow;
 use anyhow::Context;
-use anyhow::Result;
 use clap::Args;
 use clap::Subcommand;
 use photohash::database;
@@ -14,7 +13,7 @@ use std::process::Command;
 pub struct DbPath {}
 
 impl DbPath {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         println!("{}", database::get_database_path()?.display());
         Ok(())
     }
@@ -25,19 +24,19 @@ impl DbPath {
 pub struct DbOpen {}
 
 impl DbOpen {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let mut cmd = Command::new("sqlite3");
         cmd.arg(database::get_database_path()?);
         Self::exec(cmd).context("failed to run sqlite3")
     }
 
     #[cfg(unix)]
-    fn exec(mut cmd: Command) -> Result<()> {
+    fn exec(mut cmd: Command) -> anyhow::Result<()> {
         Err(cmd.exec().into())
     }
 
     #[cfg(not(unix))]
-    fn exec(mut cmd: Command) -> Result<()> {
+    fn exec(mut cmd: Command) -> anyhow::Result<()> {
         let status = cmd.status()?;
         if status.success() {
             Ok(())
@@ -57,7 +56,7 @@ pub enum Db {
 }
 
 impl Db {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         match self {
             Db::DbPath(cmd) => cmd.run().await,
             Db::DbOpen(cmd) => cmd.run().await,

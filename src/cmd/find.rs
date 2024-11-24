@@ -1,6 +1,5 @@
 use crate::cmd::diff::index_destination;
 use crate::cmd::index;
-use anyhow::Result;
 use clap::Args;
 use photohash::Database;
 use std::collections::BTreeSet;
@@ -22,7 +21,7 @@ pub struct Find {
 }
 
 impl Find {
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(mut self) -> anyhow::Result<()> {
         self.src = self.src.canonicalize()?;
         self.dests = self
             .dests
@@ -62,7 +61,7 @@ async fn find_matching(
     src: PathBuf,
     dests: Vec<PathBuf>,
     exact: bool,
-) -> Result<FoundMatches> {
+) -> anyhow::Result<FoundMatches> {
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.

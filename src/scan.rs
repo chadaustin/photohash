@@ -4,7 +4,6 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
-use anyhow::Result;
 use futures::FutureExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -14,7 +13,7 @@ const PATH_CHANNEL_CAPACITY: usize = 100000;
 const META_CHANNEL_CAPACITY: usize = 100000;
 const IO_CONCURRENCY: usize = 4;
 
-fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
+fn canonicalize_all(paths: &[&Path]) -> anyhow::Result<Vec<PathBuf>> {
     paths
         .iter()
         .map(|path| {
@@ -38,7 +37,9 @@ fn canonicalize_all(paths: &[&Path]) -> Result<Vec<PathBuf>> {
  * concurrency from IO concurrency.
  */
 
-fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
+fn walkdir_scan(
+    paths: &[&Path],
+) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     // Bounding this pool would allow relinquishing this thread when
@@ -98,7 +99,9 @@ fn walkdir_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Resu
  * on Linux or macOS.
  */
 
-fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
+fn jwalk_scan(
+    paths: &[&Path],
+) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     let (path_tx, path_rx) = batch_channel::bounded(PATH_CHANNEL_CAPACITY);
@@ -184,7 +187,8 @@ fn jwalk_scan(paths: &[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result
 #[cfg(windows)]
 mod win;
 
-type ScanFn = fn(&[&Path]) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>>;
+type ScanFn =
+    fn(&[&Path]) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>>;
 
 #[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {

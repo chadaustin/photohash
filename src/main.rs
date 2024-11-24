@@ -1,6 +1,5 @@
 #![allow(clippy::redundant_pattern_matching)]
 
-use anyhow::Result;
 use clap::Parser;
 use photohash::iopool;
 use photohash::model::Hash32;
@@ -15,7 +14,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 const READ_SIZE: usize = 65536;
 
-async fn compute_blake3(path: PathBuf) -> Result<Hash32> {
+async fn compute_blake3(path: PathBuf) -> anyhow::Result<Hash32> {
     // This assumes that computing blake3 is much faster than IO and
     // will not contend with other workers.
     iopool::run_in_io_pool(move || {
@@ -42,7 +41,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let opt = Args::parse_from(wild::args_os());
     opt.command.run().await
 }

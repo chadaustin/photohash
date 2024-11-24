@@ -39,9 +39,7 @@ impl blockhash::Image for HeifPerceptualImage<'_> {
     }
 }
 
-pub async fn compute_image_hashes(
-    path: &Path,
-) -> std::result::Result<ImageMetadata, ImageMetadataError> {
+pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata, ImageMetadataError> {
     let libheif = LibHeif::new();
 
     let file_contents = iopool::get_file_contents(path.to_owned()).await?;

@@ -1,9 +1,8 @@
-use anyhow::Result;
 use clap::Args;
 use std::path::Path;
 use std::path::PathBuf;
 
-fn read_exif_from_jpeg(path: &Path) -> Result<exif::Exif> {
+fn read_exif_from_jpeg(path: &Path) -> anyhow::Result<exif::Exif> {
     let file = std::fs::File::open(path)?;
 
     let reader = exif::Reader::new();
@@ -18,7 +17,7 @@ pub struct Exif {
 }
 
 impl Exif {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         for path in &self.paths {
             let exif = read_exif_from_jpeg(path)?;
             println!("{}", path.display());

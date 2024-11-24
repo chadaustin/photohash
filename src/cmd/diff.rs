@@ -1,5 +1,4 @@
 use crate::cmd::index;
-use anyhow::Result;
 use clap::Args;
 use photohash::model::Hash32;
 use photohash::model::IMPath;
@@ -53,7 +52,7 @@ impl Dots {
 }
 
 impl Diff {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let difference =
@@ -124,7 +123,7 @@ pub struct DestinationIndex {
 pub async fn index_destination(
     db: &Arc<Mutex<Database>>,
     dests: &[&Path],
-) -> Result<DestinationIndex> {
+) -> anyhow::Result<DestinationIndex> {
     let mut index = DestinationIndex::default();
 
     eprint!("scanning destination...");
@@ -175,7 +174,7 @@ pub async fn compute_difference(
     src: PathBuf,
     dests: Vec<PathBuf>,
     exact: bool,
-) -> Result<Differences> {
+) -> anyhow::Result<Differences> {
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.

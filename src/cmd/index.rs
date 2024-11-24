@@ -1,5 +1,4 @@
 use crate::compute_blake3;
-use anyhow::Result;
 use clap::Args;
 use hex::ToHex;
 use photohash::hash;
@@ -30,7 +29,7 @@ pub struct Index {
 }
 
 impl Index {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let here = Path::new(".");
@@ -126,7 +125,7 @@ impl Index {
 pub fn do_index(
     db: &Arc<Mutex<Database>>,
     dirs: &[&Path],
-) -> Result<mpsc::Receiver<JoinHandle<Result<ProcessFileResult>>>> {
+) -> anyhow::Result<mpsc::Receiver<JoinHandle<anyhow::Result<ProcessFileResult>>>> {
     let scanner = scan::get_default_scan();
     let path_meta_rx = scanner(dirs)?;
 
@@ -208,7 +207,7 @@ async fn process_file(
     path: String,
     file_info: FileInfo,
     db_metadata: Option<ContentMetadata>,
-) -> Result<ProcessFileResult> {
+) -> anyhow::Result<ProcessFileResult> {
     let mut blake3_computed = false;
 
     // TODO: only open the file once, and reuse it for any potential image hashing

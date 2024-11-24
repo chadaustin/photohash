@@ -1,5 +1,4 @@
 use crate::cmd::index::do_index;
-use anyhow::Result;
 use clap::Args;
 use photohash::hash;
 use photohash::Database;
@@ -16,7 +15,7 @@ pub struct Broken {
 }
 
 impl Broken {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let dirs: Vec<_> = self.dirs.iter().map(|d| d.as_ref()).collect();

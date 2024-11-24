@@ -1,6 +1,5 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
-use anyhow::Result;
 use ntapi::ntioapi::FileDirectoryInformation;
 use ntapi::ntioapi::NtCreateFile;
 use ntapi::ntioapi::NtQueryDirectoryFile;
@@ -353,7 +352,7 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
 
 pub fn windows_scan(
     paths: &[&Path],
-) -> Result<batch_channel::Receiver<(IMPath, Result<FileInfo>)>> {
+) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
 
     let (meta_tx, meta_rx) = batch_channel::unbounded_sync();

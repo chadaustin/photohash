@@ -1,6 +1,5 @@
 use crate::cmd::diff::compute_difference;
 use anyhow::bail;
-use anyhow::Result;
 use clap::Args;
 use clap::ValueEnum;
 use photohash::Database;
@@ -61,7 +60,7 @@ impl FromStr for Mode {
 }
 
 impl Separate {
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(mut self) -> anyhow::Result<()> {
         // We need to canonicalize to correctly strip_prefix later.
         self.src = self.src.canonicalize()?;
         self.dests = self

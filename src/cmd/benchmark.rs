@@ -2,7 +2,6 @@
 
 use crate::cmd::index;
 use anyhow::anyhow;
-use anyhow::Result;
 use chrono::DateTime;
 use chrono::Local;
 use clap::Args;
@@ -31,7 +30,7 @@ pub enum Benchmark {
 }
 
 impl Benchmark {
-    pub async fn run(&self) -> Result<()> {
+    pub async fn run(&self) -> anyhow::Result<()> {
         match self {
             Benchmark::Walkdir(cmd) => cmd.run().await,
             Benchmark::Jwalk(cmd) => cmd.run().await,
@@ -51,7 +50,7 @@ pub struct Walkdir {
 }
 
 impl Walkdir {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let now = Instant::now();
         let mut stat_calls = 0;
 
@@ -90,7 +89,7 @@ pub struct Jwalk {
 }
 
 impl Jwalk {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let now = Instant::now();
         let mut stat_calls = 0;
         for entry in jwalk::WalkDir::new(&self.path)
@@ -137,7 +136,7 @@ pub struct JwalkParStat {
 }
 
 impl JwalkParStat {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let now = Instant::now();
 
         let (path_tx, path_rx) = batch_channel::unbounded_sync();
@@ -209,7 +208,7 @@ pub struct Scan {
 }
 
 impl Scan {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let scan = self
             .scanner
             .as_ref()
@@ -254,7 +253,7 @@ pub struct Index {
 }
 
 impl Index {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(if self.real_db {
             Database::open()?
         } else {
@@ -283,7 +282,7 @@ pub struct Validate {
 }
 
 impl Validate {
-    async fn run(&self) -> Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let scanners = scan::get_all_scanners();
         let mut results = Vec::with_capacity(scanners.len());
         let mut all_scanners = HashSet::new();
@@ -305,7 +304,7 @@ impl Validate {
             .await
             .into_iter()
             .map(|f| f.unwrap())
-            .collect::<Result<_>>()?;
+            .collect::<anyhow::Result<_>>()?;
 
         // path -> {scanner_name -> metadata}
         let mut path_to_scanner: HashMap<IMPath, HashMap<&'static str, FileInfo>> = HashMap::new();

@@ -4,7 +4,6 @@ use crate::model::Hash32;
 use crate::model::ImageMetadata;
 use anyhow::anyhow;
 use anyhow::Context;
-use anyhow::Result;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Statement;
@@ -125,7 +124,7 @@ impl Database {
 }
 
 impl Database {
-    pub fn open() -> Result<Self> {
+    pub fn open() -> anyhow::Result<Self> {
         let database_path = get_database_path()?;
 
         if let Some(parent) = database_path.parent() {
@@ -140,12 +139,12 @@ impl Database {
         Self::init_schema(conn)
     }
 
-    pub fn open_memory() -> Result<Self> {
+    pub fn open_memory() -> anyhow::Result<Self> {
         let conn = Connection::open_in_memory()?;
         Self::init_schema(conn)
     }
 
-    fn init_schema(mut conn: Connection) -> Result<Self> {
+    fn init_schema(mut conn: Connection) -> anyhow::Result<Self> {
         // TODO: on newer SQLite, use STRICT
 
         conn.execute(CREATE_TABLE_FILES, ())
@@ -165,13 +164,13 @@ impl Database {
     }
 
     /// For benchmarking.
-    pub fn rusqlite_transaction(&mut self) -> Result<()> {
+    pub fn rusqlite_transaction(&mut self) -> anyhow::Result<()> {
         self.conn().unchecked_transaction()?;
         Ok(())
     }
 
     /// For benchmarking.
-    pub fn cached_immediate_transaction(&self) -> Result<()> {
+    pub fn cached_immediate_transaction(&self) -> anyhow::Result<()> {
         let _ = self
             .conn()
             .prepare_cached("BEGIN IMMEDIATE TRANSACTION")?
@@ -181,7 +180,7 @@ impl Database {
     }
 
     /// For benchmarking.
-    pub fn cached_deferred_transaction(&self) -> Result<()> {
+    pub fn cached_deferred_transaction(&self) -> anyhow::Result<()> {
         let _ = self
             .conn()
             .prepare_cached("BEGIN DEFERRED TRANSACTION")?
@@ -190,9 +189,9 @@ impl Database {
         Ok(())
     }
 
-    pub fn with_transaction<T, F>(&mut self, f: F) -> Result<T>
+    pub fn with_transaction<T, F>(&mut self, f: F) -> anyhow::Result<T>
     where
-        F: FnOnce(&Connection, &mut CachedStatements) -> Result<T>,
+        F: FnOnce(&Connection, &mut CachedStatements) -> anyhow::Result<T>,
     {
         self.0.with_dependent_mut(|conn, stmt| {
             let _ = stmt.begin_tx.execute(())?;
@@ -209,14 +208,14 @@ impl Database {
         })
     }
 
-    pub fn with_statement<T, F>(&mut self, f: F) -> Result<T>
+    pub fn with_statement<T, F>(&mut self, f: F) -> anyhow::Result<T>
     where
-        F: FnOnce(&mut CachedStatements) -> Result<T>,
+        F: FnOnce(&mut CachedStatements) -> anyhow::Result<T>,
     {
         self.0.with_dependent_mut(|_conn, stmt| f(stmt))
     }
 
-    pub fn get_file(&mut self, path: &str) -> Result<Option<ContentMetadata>> {
+    pub fn get_file(&mut self, path: &str) -> anyhow::Result<Option<ContentMetadata>> {
         self.with_statement(|stmt| {
             Ok(stmt
                 .get_file
@@ -225,7 +224,7 @@ impl Database {
         })
     }
 
-    pub fn get_files<P>(&mut self, paths: &[P]) -> Result<Vec<Option<ContentMetadata>>>
+    pub fn get_files<P>(&mut self, paths: &[P]) -> anyhow::Result<Vec<Option<ContentMetadata>>>
     where
         P: AsRef<str> + Copy,
     {
@@ -269,7 +268,7 @@ impl Database {
         })
     }
 
-    pub fn add_files(&mut self, files: &[(&str, &ContentMetadata)]) -> Result<()> {
+    pub fn add_files(&mut self, files: &[(&str, &ContentMetadata)]) -> anyhow::Result<()> {
         // TODO: optimize bulk insertions
         self.with_transaction(|_conn, stmt| {
             for (path, file) in files {
@@ -296,7 +295,7 @@ impl Database {
         })
     }
 
-    pub fn get_image_metadata(&mut self, blake3: &Hash32) -> Result<Option<ImageMetadata>> {
+    pub fn get_image_metadata(&mut self, blake3: &Hash32) -> anyhow::Result<Option<ImageMetadata>> {
         self.with_statement(|stmt| {
             Ok(stmt
                 .get_image
@@ -309,7 +308,7 @@ impl Database {
         &mut self,
         blake3: &Hash32,
         image_metadata: &ImageMetadata,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         self.with_statement(|stmt| {
             stmt.add_image.execute((
                 &blake3,
@@ -333,7 +332,7 @@ impl Database {
     }
 }
 
-pub fn get_database_path() -> Result<PathBuf> {
+pub fn get_database_path() -> anyhow::Result<PathBuf> {
     let dirs = match directories::BaseDirs::new() {
         Some(dirs) => dirs,
         None => {
@@ -382,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn in_memory_database_file_info() -> Result<()> {
+    fn in_memory_database_file_info() -> anyhow::Result<()> {
         let mut db = Database::open_memory()?;
 
         let path = String::from("test");
@@ -406,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn record_and_retrieve_image_metadata() -> Result<()> {
+    fn record_and_retrieve_image_metadata() -> anyhow::Result<()> {
         let mut db = Database::open_memory()?;
         let blake3 = Hash32::default();
 
@@ -435,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn record_and_retrieve_invalid_image_metadata() -> Result<()> {
+    fn record_and_retrieve_invalid_image_metadata() -> anyhow::Result<()> {
         let mut db = Database::open_memory()?;
         let blake3 = Hash32::default();
 

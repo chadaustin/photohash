@@ -5,7 +5,6 @@ use crate::iopool;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 use anyhow::Context;
-use anyhow::Result;
 use image_hasher::HashAlg;
 use std::cmp::min;
 use std::convert::TryInto;
@@ -37,9 +36,7 @@ impl blockhash::Image for JpegPerceptualImage<'_> {
     }
 }
 
-pub async fn compute_image_hashes(
-    path: &Path,
-) -> std::result::Result<ImageMetadata, ImageMetadataError> {
+pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata, ImageMetadataError> {
     let file_contents = Arc::new(iopool::get_file_contents(path.to_owned()).await?);
 
     let fc = file_contents.clone();
@@ -96,7 +93,7 @@ pub async fn compute_image_hashes(
     }
 }
 
-fn read_transform_from_exif(mut file_contents: &[u8]) -> Result<TransformOp> {
+fn read_transform_from_exif(mut file_contents: &[u8]) -> anyhow::Result<TransformOp> {
     let exif_segment = match exif::get_exif_attr_from_jpeg(&mut file_contents) {
         Ok(s) => s,
         Err(exif::Error::NotFound(_) | exif::Error::InvalidFormat(_)) => {
@@ -134,7 +131,7 @@ fn read_transform_from_exif(mut file_contents: &[u8]) -> Result<TransformOp> {
     Ok(transform)
 }
 
-async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
+async fn rothash(jpeg_data: Arc<Vec<u8>>) -> anyhow::Result<Hash32> {
     let jd0 = jpeg_data.clone();
     let jd90 = jpeg_data.clone();
     let jd180 = jpeg_data.clone();
@@ -146,7 +143,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
         tokio::spawn(async move {
             let image = turbojpeg::decompress(&jd0, turbojpeg::PixelFormat::RGB)
                 .context(DECOMPRESS_ERROR)?;
-            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+            Ok(blake3::hash(&image.pixels).into()) as anyhow::Result<Hash32>
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
@@ -156,7 +153,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
             .context(TRANSFORM_ERROR)?;
             let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
                 .context(DECOMPRESS_ERROR)?;
-            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+            Ok(blake3::hash(&image.pixels).into()) as anyhow::Result<Hash32>
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
@@ -166,7 +163,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
             .context(TRANSFORM_ERROR)?;
             let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
                 .context(DECOMPRESS_ERROR)?;
-            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+            Ok(blake3::hash(&image.pixels).into()) as anyhow::Result<Hash32>
         }),
         tokio::spawn(async move {
             let jpeg_data = turbojpeg::transform(
@@ -176,7 +173,7 @@ async fn rothash(jpeg_data: Arc<Vec<u8>>) -> Result<Hash32> {
             .context(TRANSFORM_ERROR)?;
             let image = turbojpeg::decompress(&jpeg_data, turbojpeg::PixelFormat::RGB)
                 .context(DECOMPRESS_ERROR)?;
-            Ok(blake3::hash(&image.pixels).into()) as Result<Hash32>
+            Ok(blake3::hash(&image.pixels).into()) as anyhow::Result<Hash32>
         }),
     )?;
 

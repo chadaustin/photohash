@@ -1,6 +1,5 @@
 #![allow(clippy::let_unit_value)]
 
-use anyhow::Result;
 use clap::Subcommand;
 
 mod benchmark;
@@ -29,7 +28,7 @@ pub enum MainCommand {
 }
 
 impl MainCommand {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         match self {
             MainCommand::Benchmark(cmd) => cmd.run().await,
             MainCommand::Broken(cmd) => cmd.run().await,
