@@ -369,10 +369,25 @@ pub fn windows_scan(
             }
 
             while let Some((handle, path)) = queue.pop_front() {
-                let handle = handle.unwrap_or_else(|| {
-                    // TODO: propagate error
-                    DirectoryHandle::open(&path).unwrap()
-                });
+                let Some(path) = path.to_str() else {
+                    eprintln!("{} not unicode", path.display());
+                    // TODO: We only support UTF-8 paths for now.
+                    continue;
+                };
+
+                let handle = match handle {
+                    Some(handle) => handle,
+                    None => match DirectoryHandle::open(path) {
+                        Ok(handle) => handle,
+                        Err(e) => {
+                            eprintln!("error opening handle: {}", path);
+                            meta_tx
+                                .send((path.to_string(), Err(e.into())))
+                                .expect("failed to send");
+                            continue;
+                        }
+                    },
+                };
 
                 // TODO: double-buffer this allocation
                 let mut dirs_to_add = Vec::new();
@@ -387,7 +402,7 @@ pub fn windows_scan(
                     // Construct a full child path. I hate that this
                     // has two allocations. I haven't found a way to
                     // bypass that.
-                    let child_full_path = Path::join(&path, OsString::from_wide(e.name));
+                    let child_full_path = Path::join(Path::new(path), OsString::from_wide(e.name));
                     //eprintln!("child_full_path {}", child_full_path.display());
 
                     if e.is_dir() {
