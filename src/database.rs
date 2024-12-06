@@ -14,35 +14,48 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::SystemTime;
 
-const CREATE_TABLE_FILES: &str = "\
-CREATE TABLE IF NOT EXISTS files (
-    path TEXT PRIMARY KEY,
-    inode INT NOT NULL,
-    size INT NOT NULL,
-    mtime INT NOT NULL,
-    blake3 BLOB NOT NULL
-) WITHOUT ROWID
-";
+mod schema {
+    use indoc::indoc;
 
-const CREATE_TABLE_IMAGES: &str = "\
-CREATE TABLE IF NOT EXISTS images (
-    blake3 BLOB PRIMARY KEY,
-    width INT,
-    height INT,
-    blockhash256 BLOB
-) WITHOUT ROWID
-";
+    pub const CREATE_TABLE_FILES: &str = indoc! {"
+        CREATE TABLE IF NOT EXISTS files (
+            path TEXT PRIMARY KEY,
+            inode INT NOT NULL,
+            size INT NOT NULL,
+            mtime INT NOT NULL,
+            blake3 BLOB NOT NULL
+        ) WITHOUT ROWID
+    "};
 
-const RECREATE_TABLE_IMAGES: &str = "\
-DROP TABLE images;
-CREATE TABLE images (
-    blake3 BLOB PRIMARY KEY,
-    width INT,
-    height INT,
-    blockhash256 BLOB,
-    jpegrothash BLOB
-) WITHOUT ROWID
-";
+    pub const CREATE_TABLE_IMAGES: &str = indoc! {"
+        CREATE TABLE IF NOT EXISTS images (
+            blake3 BLOB PRIMARY KEY,
+            width INT,
+            height INT,
+            blockhash256 BLOB
+        ) WITHOUT ROWID
+    "};
+
+    pub const RECREATE_TABLE_IMAGES: &str = indoc! {"
+        DROP TABLE images;
+        CREATE TABLE images (
+            blake3 BLOB PRIMARY KEY,
+            width INT,
+            height INT,
+            blockhash256 BLOB,
+            jpegrothash BLOB
+        ) WITHOUT ROWID
+    "};
+
+    pub const CREATE_TABLE_EXTRA_HASHES: &str = indoc! {"
+        CREATE TABLE extra_hashes (
+            blake3 BLOB PRIMARY KEY,
+            md5 BLOB,
+            sha1 BLOB,
+            sha256 BLOB
+        ) WITHOUT ROWID
+    "};
+}
 
 const GET_FILE: &str = "\
 SELECT inode, size, mtime, blake3
@@ -147,16 +160,17 @@ impl Database {
     fn init_schema(mut conn: Connection) -> anyhow::Result<Self> {
         // TODO: on newer SQLite, use STRICT
 
-        conn.execute(CREATE_TABLE_FILES, ())
+        conn.execute(schema::CREATE_TABLE_FILES, ())
             .context("failed to create `files` table")?;
 
-        conn.execute(CREATE_TABLE_IMAGES, ())
+        conn.execute(schema::CREATE_TABLE_IMAGES, ())
             .context("failed to create `images` table")?;
 
         let migrations = Migrations::new(vec![
             // The first version is reserved for the legacy schema.
             M::up(""),
-            M::up(RECREATE_TABLE_IMAGES),
+            M::up(schema::RECREATE_TABLE_IMAGES),
+            M::up(schema::CREATE_TABLE_EXTRA_HASHES),
         ]);
         migrations.to_latest(&mut conn)?;
 
