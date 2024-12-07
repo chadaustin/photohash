@@ -1,4 +1,5 @@
 use crate::model::ContentMetadata;
+use crate::model::ExtraHashes;
 use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
@@ -87,6 +88,18 @@ INSERT OR REPLACE INTO images
 VALUES (?, ?, ?, ?, ?)
 ";
 
+const GET_EXTRA_HASHES: &str = "\
+SELECT md5, sha1, sha256
+FROM extra_hashes
+WHERE blake3 = ?
+";
+
+const ADD_EXTRA_HASHES: &str = "\
+INSERT OR REPLACE INTO extra_hashes
+(blake3, md5, sha1, sha256)
+VALUES (?, ?, ?, ?)
+";
+
 pub struct CachedStatements<'conn> {
     begin_tx: Statement<'conn>,
     commit_tx: Statement<'conn>,
@@ -96,6 +109,8 @@ pub struct CachedStatements<'conn> {
     add_file: Statement<'conn>,
     get_image: Statement<'conn>,
     add_image: Statement<'conn>,
+    get_extra_hashes: Statement<'conn>,
+    add_extra_hashes: Statement<'conn>,
 }
 
 unsafe impl Send for CachedStatements<'_> {}
@@ -111,6 +126,8 @@ fn cache_statements(conn: &Connection) -> CachedStatements<'_> {
         add_file: conn.prepare(ADD_FILE).unwrap(),
         get_image: conn.prepare(GET_IMAGE).unwrap(),
         add_image: conn.prepare(ADD_IMAGE).unwrap(),
+        get_extra_hashes: conn.prepare(GET_EXTRA_HASHES).unwrap(),
+        add_extra_hashes: conn.prepare(ADD_EXTRA_HASHES).unwrap(),
     }
 }
 
@@ -344,6 +361,39 @@ impl Database {
             jpegrothash: row.get(3)?,
         })
     }
+
+    pub fn get_extra_hashes(&mut self, blake3: &Hash32) -> anyhow::Result<Option<ExtraHashes>> {
+        self.with_statement(|stmt| {
+            Ok(stmt
+                .get_extra_hashes
+                .query_row((blake3,), Self::extra_hashes_from_single_row)
+                .optional()?)
+        })
+    }
+
+    fn extra_hashes_from_single_row(row: &rusqlite::Row) -> rusqlite::Result<ExtraHashes> {
+        Ok(ExtraHashes {
+            md5: row.get(0)?,
+            sha1: row.get(1)?,
+            sha256: row.get(2)?,
+        })
+    }
+
+    pub fn add_extra_hashes(
+        &mut self,
+        blake3: &Hash32,
+        extra_hashes: &ExtraHashes,
+    ) -> anyhow::Result<()> {
+        self.with_statement(|stmt| {
+            stmt.add_extra_hashes.execute((
+                &blake3,
+                &extra_hashes.md5,
+                &extra_hashes.sha1,
+                &extra_hashes.sha256,
+            ))?;
+            Ok(())
+        })
+    }
 }
 
 pub fn get_database_path() -> anyhow::Result<PathBuf> {
@@ -456,7 +506,33 @@ mod tests {
 
         let im = ImageMetadata::invalid();
         db.add_image_metadata(&blake3, &im)?;
-        assert_eq!(true, db.get_image_metadata(&blake3)?.unwrap().is_invalid());
+        assert!(db.get_image_metadata(&blake3)?.unwrap().is_invalid());
+
+        Ok(())
+    }
+
+    #[test]
+    fn record_and_retrieve_empty_hashes() -> anyhow::Result<()> {
+        use digest::Digest;
+
+        let mut db = Database::open_memory()?;
+        let data = b"hello world";
+        let b3_storage = blake3::hash(data);
+        let b3 = b3_storage.as_bytes();
+
+        assert_eq!(None, db.get_extra_hashes(b3)?);
+
+        db.add_extra_hashes(b3, &Default::default())?;
+        assert_eq!(Some(Default::default()), db.get_extra_hashes(b3)?);
+
+        let extra_hashes = ExtraHashes {
+            md5: Some(md5::Md5::digest(data).into()),
+            sha1: Some(sha1::Sha1::digest(data).into()),
+            sha256: Some(sha2::Sha256::digest(data).into()),
+        };
+
+        db.add_extra_hashes(b3, &extra_hashes)?;
+        assert_eq!(Some(extra_hashes), db.get_extra_hashes(b3)?);
 
         Ok(())
     }

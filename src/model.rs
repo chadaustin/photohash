@@ -5,8 +5,9 @@ use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;
 
 pub type Hash<const N: usize> = [u8; N];
-pub type Hash20 = [u8; 20];
-pub type Hash32 = [u8; 32];
+pub type Hash16 = Hash<16>;
+pub type Hash20 = Hash<20>;
+pub type Hash32 = Hash<32>;
 
 /// Only support unicode filenames for efficient conversion into and
 /// out of SQLite.
@@ -97,4 +98,11 @@ impl ImageMetadata {
     pub fn is_invalid(&self) -> bool {
         self.dimensions.is_none()
     }
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct ExtraHashes {
+    pub md5: Option<Hash16>,
+    pub sha1: Option<Hash20>,
+    pub sha256: Option<Hash32>,
 }
