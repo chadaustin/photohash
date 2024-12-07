@@ -1,7 +1,9 @@
+use photohash::hash::compute_blake3;
+use photohash::hash::compute_extra_hashes;
 use photohash::hash::compute_image_hashes;
 
 #[tokio::test]
-async fn test_moonlight() -> anyhow::Result<()> {
+async fn moonlight() -> anyhow::Result<()> {
     let hashes = compute_image_hashes("tests/images/Moonlight.heic").await?;
     assert_eq!(Some((4032, 3024)), hashes.dimensions);
     assert_eq!(None, hashes.jpegrothash);
@@ -16,7 +18,7 @@ async fn test_moonlight() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_saturn_v() -> anyhow::Result<()> {
+async fn saturn_v() -> anyhow::Result<()> {
     let hashes = compute_image_hashes("tests/images/SaturnV.jpeg").await?;
     assert_eq!(Some((4032, 3024)), hashes.dimensions);
     assert_eq!(
@@ -32,6 +34,34 @@ async fn test_saturn_v() -> anyhow::Result<()> {
             199, 24, 207, 25, 199, 153, 243, 241, 243, 243, 1, 244, 192, 4
         ]),
         hashes.blockhash256,
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn blake3() -> anyhow::Result<()> {
+    let b3 = compute_blake3("tests//images/Moonlight.heic".into()).await?;
+    assert_eq!(
+        "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
+        hex::encode(b3)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn extra_hashes() -> anyhow::Result<()> {
+    let extra_hashes = compute_extra_hashes("tests/images/Moonlight.heic".into()).await?;
+    assert_eq!(
+        Some("e5dae7611472d7102fc3a05a16152247"),
+        extra_hashes.md5.map(hex::encode).as_deref()
+    );
+    assert_eq!(
+        Some("3260706646db71bb48cc4165e46410fde3e98a44"),
+        extra_hashes.sha1.map(hex::encode).as_deref()
+    );
+    assert_eq!(
+        Some("d5b1055e3a5f5fc68d5a1ae706639f3cd1bd34349e6db7003e48cb11f755d3e8"),
+        extra_hashes.sha256.map(hex::encode).as_deref()
     );
     Ok(())
 }

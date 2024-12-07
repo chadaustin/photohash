@@ -1,4 +1,3 @@
-use crate::compute_blake3;
 use clap::Args;
 use hex::ToHex;
 use photohash::hash;
@@ -218,14 +217,14 @@ async fn process_file(
                 record.blake3
             } else {
                 blake3_computed = true;
-                compute_blake3(PathBuf::from(&path)).await?
+                hash::compute_blake3(PathBuf::from(&path)).await?
             }
         }
         None => {
             // No record of this file - blake3 must be computed.
             //eprintln!("computing blake3 of {}", path.display());
             blake3_computed = true;
-            compute_blake3(PathBuf::from(&path)).await?
+            hash::compute_blake3(PathBuf::from(&path)).await?
         }
     };
 

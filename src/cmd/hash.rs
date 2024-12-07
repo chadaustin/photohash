@@ -1,5 +1,6 @@
 use clap::Args;
 use hex::ToHex;
+use photohash::hash::compute_blake3;
 use photohash::hash::compute_image_hashes;
 use photohash::model;
 use std::fmt::Display;
@@ -18,7 +19,7 @@ impl Hash {
             println!("{}", file.display());
             println!(
                 "  blake3:       {}",
-                hash_str(crate::compute_blake3(file.clone()).await.map(Some))
+                hash_str(compute_blake3(file.clone()).await.map(Some))
             );
             let h = compute_image_hashes(file).await;
             println!(
