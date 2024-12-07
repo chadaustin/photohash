@@ -36,7 +36,7 @@ debug = true
 vcpkg = "0.2.15"
 
 [dev-dependencies]
-criterion = { version = "0", features = ["html_reports"] }
+criterion = { version = "0.5.1", features = ["html_reports"] }
 digest = "0.10.7"
 md-5 = "0.10.6"
 sha1 = "0.10.6"
@@ -59,7 +59,7 @@ dunce = "1.0.5"
 kamadak-exif = "0.6.1"
 keepawake = "0.5.1"
 futures = "0.3"
-hex = "0"
+hex = "0.4.3"
 image = { version = "0.25.2", features = [] }
 image_hasher = "2.0.0"
 indoc = "2.0.5"
