@@ -8,6 +8,9 @@ use photohash::model::IMPath;
 use photohash::model::ImageMetadata;
 use photohash::scan;
 use photohash::Database;
+use serde::ser::SerializeSeq;
+use serde::Serialize;
+use serde::Serializer;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,8 +26,86 @@ const TRACE_INVALID_PHOTOS: bool = false;
 #[derive(Args)]
 #[command(name = "index", about = "Scan directories and update the index")]
 pub struct Index {
+    #[arg(long)]
+    json: bool,
+
     #[arg(required(true))]
     dirs: Vec<PathBuf>,
+}
+
+#[derive(Serialize)]
+struct JsonRecord {
+    path: String,
+    size: u64,
+    blake3: String,
+}
+
+enum Seq<'a> {
+    Stdout,
+    JsonSerde(<&'a mut serde_json::Serializer<std::io::Stdout> as serde::Serializer>::SerializeSeq),
+}
+
+impl Seq<'_> {
+    fn file(&mut self, pfr: &ProcessFileResult) -> anyhow::Result<()> {
+        let content_metadata = &pfr.content_metadata;
+        match self {
+            Seq::Stdout => {
+                if pfr.blake3_computed || pfr.image_metadata_computed {
+                    println!(
+                        "{} {:>8}K {}",
+                        content_metadata.blake3.encode_hex::<String>(),
+                        content_metadata.file_info.size / 1024,
+                        &dunce::simplified(pfr.path.as_ref()).display(),
+                    );
+                }
+                Ok(())
+            }
+            Seq::JsonSerde(seq) => {
+                seq.serialize_element(&JsonRecord {
+                    path: pfr.path.clone(),
+                    size: content_metadata.file_info.size,
+                    blake3: hex::encode(content_metadata.blake3),
+                })?;
+                Ok(())
+            }
+        }
+    }
+
+    fn end(self) -> anyhow::Result<()> {
+        match self {
+            Seq::Stdout => {}
+            Seq::JsonSerde(seq) => seq.end()?,
+        }
+        Ok(())
+    }
+}
+
+trait OutputMode {
+    fn start(&mut self) -> anyhow::Result<Seq<'_>>;
+}
+
+struct StdoutMode;
+impl OutputMode for StdoutMode {
+    fn start(&mut self) -> anyhow::Result<Seq<'_>> {
+        Ok(Seq::Stdout)
+    }
+}
+
+struct JsonMode {
+    serializer: serde_json::Serializer<std::io::Stdout>,
+}
+
+impl JsonMode {
+    fn new() -> Self {
+        let serializer = serde_json::Serializer::new(std::io::stdout());
+        Self { serializer }
+    }
+}
+
+impl OutputMode for JsonMode {
+    fn start(&mut self) -> anyhow::Result<Seq<'_>> {
+        Ok(Seq::JsonSerde(self.serializer.serialize_seq(None)?))
+    }
 }
 
 impl Index {
@@ -56,6 +137,14 @@ impl Index {
             }
         };
 
+        let mut output: Box<dyn OutputMode> = if self.json {
+            Box::new(JsonMode::new())
+        } else {
+            Box::new(StdoutMode)
+        };
+
+        let mut seq = output.start()?;
+
         while let Some(content_metadata_future) = metadata_rx.recv().await {
             let content_metadata_future = content_metadata_future.await?;
             let pfr = match content_metadata_future {
@@ -65,58 +154,11 @@ impl Index {
                     continue;
                 }
             };
-            let content_metadata = pfr.content_metadata;
-            if pfr.blake3_computed || pfr.image_metadata_computed {
-                println!(
-                    "{} {:>8}K {}",
-                    content_metadata.blake3.encode_hex::<String>(),
-                    content_metadata.file_info.size / 1024,
-                    dunce::simplified(pfr.path.as_ref()).display(),
-                );
-            }
+            seq.file(&pfr)?;
         }
 
-        /*
-                let (paths_sender, paths_receiver) = unbounded();
-                rayon::spawn(move || {
-                    for entry in WalkDir::new(".") {
-                        if let Ok(e) = entry {
-                            if e.file_type().is_file() {
-                                paths_sender.send(e.into_path()).unwrap();
-                            }
-                        }
-                    }
-                });
-                let (outputs_sender, outputs_receiver) = unbounded();
-                rayon::spawn(move || {
-                    for path in paths_receiver {
-                        let (output_sender, output_receiver) = channel();
-                        let (pool_type, hasher) = get_hasher(&path);
-                        let pool = match pool_type {
-                            PoolType::Cpu => &cpu_pool,
-                            PoolType::Io => &io_pool,
-                        };
-                        outputs_sender.send(output_receiver).unwrap();
-                        pool.spawn_fifo(move || {
-                            let hash = hasher(&path);
-                            output_sender.send((path, hash)).unwrap_or(())
-                        });
-                    }
-                });
-                let mut stdout = std::io::stdout();
-                for output in outputs_receiver {
-                    let (path, hash) = output.await?;
-                    match hash {
-                        Ok(hash) => write!(
-                            &mut stdout,
-                            "{} *{}\n",
-                            hash.encode_hex::<String>(),
-                            path.display()
-                        )?,
-                        Err(e) => eprintln!("hashing {} failed: {}", path.display(), e),
-                    }
-                }
-        */
+        seq.end()?;
+
         Ok(())
     }
 }
