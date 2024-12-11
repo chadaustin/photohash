@@ -8,6 +8,7 @@ use clap::Args;
 use clap::Subcommand;
 use futures::future::join_all;
 use photohash::database::Database;
+use photohash::hash::ContentHashSet;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
 use photohash::scan;
@@ -27,6 +28,7 @@ pub enum Benchmark {
     Scan(Scan),
     Index(Index),
     Validate(Validate),
+    Hashes(Hashes),
 }
 
 impl Benchmark {
@@ -38,6 +40,7 @@ impl Benchmark {
             Benchmark::Scan(cmd) => cmd.run().await,
             Benchmark::Index(cmd) => cmd.run().await,
             Benchmark::Validate(cmd) => cmd.run().await,
+            Benchmark::Hashes(cmd) => cmd.run().await,
         }
     }
 }
@@ -358,5 +361,17 @@ impl Validate {
                 DateTime::<Local>::from(b.mtime)
             );
         }
+    }
+}
+
+#[derive(Debug, Args)]
+pub struct Hashes {}
+
+impl Hashes {
+    async fn run(&self) -> anyhow::Result<()> {
+        for c in enumset::EnumSet::<ContentHashSet>::all() {
+            println!("hash {c:?}");
+        }
+        Ok(())
     }
 }

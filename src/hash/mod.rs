@@ -4,6 +4,7 @@ use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
 use digest::DynDigest;
+use enumset::EnumSetType;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
@@ -156,6 +157,40 @@ pub async fn compute_image_hashes<P: AsRef<Path>>(
         })
     }
 }
+
+#[derive(Debug, EnumSetType)]
+pub enum ContentHashSet {
+    BLAKE3,
+    MD5,
+    SHA1,
+    SHA256,
+}
+
+/*
+#[derive(Debug)]
+pub struct ContentHashes {
+    pub blake3: Option<Hash32>,
+    pub extra_hashes: ExtraHashes,
+}
+
+pub async fn compute_content_hashes(path: PathBuf, which: ContentHashSet) -> anyhow::Result<ContentHashes> {
+    iopool::run_in_io_pool(move || {
+        let mut hasher = blake3::Hasher::new();
+        let mut file = std::fs::File::open(path)?;
+        let mut buffer = [0u8; READ_SIZE];
+        loop {
+            let n = file.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buffer[..n]);
+        }
+        Ok(hasher.finalize().into())
+    })
+    .await
+
+}
+*/
 
 pub async fn compute_blake3(path: PathBuf) -> anyhow::Result<Hash32> {
     // This assumes that computing blake3 is much faster than IO and
