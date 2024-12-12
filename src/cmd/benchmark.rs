@@ -8,15 +8,20 @@ use clap::Args;
 use clap::Subcommand;
 use futures::future::join_all;
 use photohash::database::Database;
+use photohash::hash::get_hasher;
 use photohash::hash::ContentHashSet;
+use photohash::hash::ContentHashType;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
 use photohash::scan;
+use rand::RngCore;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 use std::time::Instant;
 
 #[derive(Subcommand)]
@@ -369,9 +374,31 @@ pub struct Hashes {}
 
 impl Hashes {
     async fn run(&self) -> anyhow::Result<()> {
-        for c in enumset::EnumSet::<ContentHashSet>::all() {
-            println!("hash {c:?}");
+        for c in ContentHashSet::all() {
+            print!("{c:?}: ");
+            std::io::stdout().flush()?;
+            println!("{:.2} MB/s", self.compute_throughput(c) / (1000.0 * 1000.0));
         }
         Ok(())
+    }
+
+    fn compute_throughput(&self, c: ContentHashType) -> f64 {
+        let mut hasher = get_hasher(c);
+
+        const BUF_SIZE: usize = 64 * 1024;
+        let mut buf = [0u8; BUF_SIZE];
+        rand::thread_rng().fill_bytes(&mut buf);
+
+        let start = Instant::now();
+        let until = start + Duration::from_secs(5);
+
+        let mut hashed_bytes = 0usize;
+        while Instant::now() < until {
+            hasher.update(&buf);
+            hashed_bytes += BUF_SIZE;
+        }
+        hasher.finalize();
+        let end = Instant::now();
+        (hashed_bytes as f64) / (end - start).as_secs_f64()
     }
 }

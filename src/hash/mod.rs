@@ -159,11 +159,22 @@ pub async fn compute_image_hashes<P: AsRef<Path>>(
 }
 
 #[derive(Debug, EnumSetType)]
-pub enum ContentHashSet {
+pub enum ContentHashType {
     BLAKE3,
     MD5,
     SHA1,
     SHA256,
+}
+
+pub type ContentHashSet = enumset::EnumSet<ContentHashType>;
+
+pub fn get_hasher(hash: ContentHashType) -> Box<dyn DynDigest> {
+    match hash {
+        ContentHashType::BLAKE3 => Box::new(blake3::Hasher::new()),
+        ContentHashType::MD5 => Box::new(md5::Md5::default()),
+        ContentHashType::SHA1 => Box::new(sha1::Sha1::default()),
+        ContentHashType::SHA256 => Box::new(sha2::Sha256::default()),
+    }
 }
 
 /*
