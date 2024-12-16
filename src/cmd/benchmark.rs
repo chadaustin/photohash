@@ -374,11 +374,19 @@ pub struct Hashes {}
 
 impl Hashes {
     async fn run(&self) -> anyhow::Result<()> {
+        let mut reciprocal_throughput = 0.0;
         for c in ContentHashSet::all() {
             print!("{c:?}: ");
             std::io::stdout().flush()?;
-            println!("{:.2} MB/s", self.compute_throughput(c) / (1000.0 * 1000.0));
+            let throughput = self.compute_throughput(c);
+            println!("{:.2} MB/s", throughput / (1000.0 * 1000.0));
+            reciprocal_throughput += 1.0 / throughput;
         }
+        println!("-----");
+        println!(
+            "total: {:.2} MB/s",
+            (1.0 / reciprocal_throughput) / (1000.0 * 1000.0)
+        );
         Ok(())
     }
 
@@ -392,13 +400,17 @@ impl Hashes {
         let start = Instant::now();
         let until = start + Duration::from_secs(5);
 
-        let mut hashed_bytes = 0usize;
+        // Run one iteration to ensure hashed_bytes != 0.
+        hasher.update(&buf);
+        let mut hashed_bytes = BUF_SIZE;
+
         while Instant::now() < until {
             hasher.update(&buf);
             hashed_bytes += BUF_SIZE;
         }
         hasher.finalize();
         let end = Instant::now();
+        // Safety: end - start cannot be zero.
         (hashed_bytes as f64) / (end - start).as_secs_f64()
     }
 }
