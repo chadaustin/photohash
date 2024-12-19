@@ -38,7 +38,7 @@ async fn saturn_v() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn blake3() -> anyhow::Result<()> {
     let b3 = compute_blake3("tests//images/Moonlight.heic".into()).await?;
     assert_eq!(
@@ -48,7 +48,7 @@ async fn blake3() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn extra_hashes() -> anyhow::Result<()> {
     let extra_hashes = compute_extra_hashes("tests/images/Moonlight.heic".into()).await?;
     assert_eq!(
