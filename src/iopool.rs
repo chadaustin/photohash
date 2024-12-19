@@ -3,6 +3,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+// https://docs.rs/tokio/latest/tokio/index.html#cpu-bound-tasks-and-blocking-code
 static IO_POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
 const IO_POOL_CONCURRENCY: usize = 4;
 
@@ -28,6 +29,14 @@ where
     });
 
     rx.await.unwrap()
+}
+
+pub async fn run_in_io_pool_local<F, T>(f: F) -> T
+where
+    F: FnOnce() -> T + Send,
+    T: Send,
+{
+    tokio::task::block_in_place(move || get_io_pool().install(f))
 }
 
 pub async fn get_file_contents(path: PathBuf) -> io::Result<Vec<u8>> {

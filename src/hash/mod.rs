@@ -3,11 +3,13 @@ use crate::model::ExtraHashes;
 use crate::model::FileInfo;
 use crate::model::Hash32;
 use crate::model::ImageMetadata;
+use arrayvec::ArrayVec;
 use digest::DynDigest;
 use enumset::EnumSetType;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
+use tokio::io::AsyncReadExt;
 
 mod heic;
 mod jpeg;
@@ -177,31 +179,142 @@ pub fn get_hasher(hash: ContentHashType) -> Box<dyn DynDigest> {
     }
 }
 
-/*
-#[derive(Debug)]
+enum WorkerPool {
+    Tokio,
+    IO,
+}
+
+fn select_worker_pool(hashes: ContentHashSet) -> WorkerPool {
+    // My NAS, an Atom D2700DC with spinning iron disks, can sustain
+    // about 100 MB/s of read IO. `photohash bench hashes` gives:
+    //
+    // BLAKE3: 421.77 MB/s
+    // MD5: 243.54 MB/s
+    // SHA1: 124.63 MB/s
+    // SHA256: 56.17 MB/s
+    // -----
+    // total: 30.96 MB/s
+    //
+    // Therefore, computing extra hashes is CPU-bound. If SHA256 is in
+    // the set, we can simply reuse the Tokio pool.
+    if hashes.contains(ContentHashType::SHA256) {
+        WorkerPool::Tokio
+    } else {
+        WorkerPool::IO
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct ContentHashes {
     pub blake3: Option<Hash32>,
     pub extra_hashes: ExtraHashes,
 }
 
-pub async fn compute_content_hashes(path: PathBuf, which: ContentHashSet) -> anyhow::Result<ContentHashes> {
-    iopool::run_in_io_pool(move || {
-        let mut hasher = blake3::Hasher::new();
-        let mut file = std::fs::File::open(path)?;
-        let mut buffer = [0u8; READ_SIZE];
-        loop {
-            let n = file.read(&mut buffer)?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buffer[..n]);
-        }
-        Ok(hasher.finalize().into())
-    })
-    .await
-
+struct Hasher<'a> {
+    digest: &'a mut (dyn DynDigest + Send),
+    target: &'a mut [u8],
 }
-*/
+
+impl Hasher<'_> {
+    fn update(&mut self, data: &[u8]) {
+        self.digest.update(data)
+    }
+    fn finalize(&mut self) {
+        self.digest
+            .finalize_into_reset(self.target)
+            .expect("incorrect hash length");
+    }
+}
+
+pub async fn compute_content_hashes(
+    path: PathBuf,
+    which: ContentHashSet,
+) -> anyhow::Result<ContentHashes> {
+    let mut result = ContentHashes::default();
+
+    let mut blake3_hasher: Option<blake3::Hasher> = None;
+    let mut md5_hasher: Option<md5::Md5> = None;
+    let mut sha1_hasher: Option<sha1::Sha1> = None;
+    let mut sha256_hasher: Option<sha2::Sha256> = None;
+
+    // 4 = blake3 + md5 + sha1 + sha256
+    const HASHER_COUNT: usize = ContentHashSet::variant_count() as usize;
+    let mut hashers = ArrayVec::<_, HASHER_COUNT>::new();
+
+    if which.contains(ContentHashType::BLAKE3) {
+        hashers.push(Hasher {
+            digest: blake3_hasher.get_or_insert_default(),
+            target: result.blake3.get_or_insert_default(),
+        });
+    }
+
+    if which.contains(ContentHashType::MD5) {
+        hashers.push(Hasher {
+            digest: md5_hasher.get_or_insert_default(),
+            target: result.extra_hashes.md5.get_or_insert_default(),
+        });
+    }
+
+    if which.contains(ContentHashType::SHA1) {
+        hashers.push(Hasher {
+            digest: sha1_hasher.get_or_insert_default(),
+            target: result.extra_hashes.sha1.get_or_insert_default(),
+        });
+    }
+
+    if which.contains(ContentHashType::SHA256) {
+        hashers.push(Hasher {
+            digest: sha256_hasher.get_or_insert_default(),
+            target: result.extra_hashes.sha256.get_or_insert_default(),
+        });
+    }
+
+    match match select_worker_pool(which) {
+        WorkerPool::Tokio => {
+            let mut file = tokio::fs::File::open(path).await?;
+            // TODO: 64KiB * (100 MB/s) = 655 microseconds, perhaps
+            // below scheduling quanta. Consider a larger value.
+            let mut buffer = [0u8; READ_SIZE];
+            loop {
+                let read = file.read(&mut buffer);
+                let n = read.await?;
+                if n == 0 {
+                    break;
+                }
+                for h in &mut hashers {
+                    h.update(&buffer[..n]);
+                }
+            }
+            for mut h in hashers {
+                h.finalize();
+            }
+            Ok(())
+        }
+        WorkerPool::IO => {
+            iopool::run_in_io_pool_local(|| {
+                let mut file = std::fs::File::open(path)?;
+                let mut buffer = [0u8; READ_SIZE];
+                loop {
+                    let n = file.read(&mut buffer)?;
+                    if n == 0 {
+                        break;
+                    }
+                    for h in &mut hashers {
+                        h.update(&buffer[..n]);
+                    }
+                }
+                for mut h in hashers {
+                    h.finalize();
+                }
+                Ok(())
+            })
+            .await
+        }
+    } {
+        Ok(()) => Ok(result),
+        Err(e) => Err(e),
+    }
+}
 
 pub async fn compute_blake3(path: PathBuf) -> anyhow::Result<Hash32> {
     // This assumes that computing blake3 is much faster than IO and
