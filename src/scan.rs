@@ -187,6 +187,8 @@ fn jwalk_scan(
 #[cfg(windows)]
 mod win;
 
+// Optimization opportunity: &[&Path] could avoid allocation at some
+// callsites as &mut dyn Iterator<Item = &Path>
 type ScanFn =
     fn(&[&Path]) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>>;
 
