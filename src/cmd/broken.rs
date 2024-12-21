@@ -20,7 +20,7 @@ impl Broken {
 
         let dirs: Vec<_> = self.dirs.iter().map(|d| d.as_ref()).collect();
 
-        let mut metadata_rx = do_index(&db, &dirs)?;
+        let mut metadata_rx = do_index(&db, &dirs, false)?;
         while let Some(pfr_future) = metadata_rx.recv().await {
             let pfr = pfr_future.await??;
             if let Some(image_metadata) = pfr.image_metadata {

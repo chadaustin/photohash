@@ -272,7 +272,7 @@ impl Index {
 
         let mut pfr_results = 0;
 
-        let mut rx = index::do_index(&db, &[&self.path])?;
+        let mut rx = index::do_index(&db, &[&self.path], false)?;
         while let Some(jh) = rx.recv().await {
             let _: index::ProcessFileResult = jh.await.unwrap()?;
             pfr_results += 1;

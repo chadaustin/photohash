@@ -65,7 +65,7 @@ async fn find_matching(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = index::do_index(db, &[&src])?;
+    let mut src_rx = index::do_index(db, &[&src], false)?;
 
     // Scan the destination(s) and build hash tables.
     let index =

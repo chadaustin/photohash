@@ -231,7 +231,15 @@ pub async fn compute_content_hashes(
     which: ContentHashSet,
 ) -> anyhow::Result<ContentHashes> {
     let mut result = ContentHashes::default();
+    apply_content_hashes(&mut result, path, which).await?;
+    Ok(result)
+}
 
+async fn apply_content_hashes(
+    result: &mut ContentHashes,
+    path: PathBuf,
+    which: ContentHashSet,
+) -> anyhow::Result<()> {
     let mut blake3_hasher: Option<blake3::Hasher> = None;
     let mut md5_hasher: Option<md5::Md5> = None;
     let mut sha1_hasher: Option<sha1::Sha1> = None;
@@ -269,7 +277,7 @@ pub async fn compute_content_hashes(
         });
     }
 
-    match match select_worker_pool(which) {
+    match select_worker_pool(which) {
         WorkerPool::Tokio => {
             let mut file = tokio::fs::File::open(path).await?;
             // TODO: 64KiB * (100 MB/s) = 655 microseconds, perhaps
@@ -310,10 +318,34 @@ pub async fn compute_content_hashes(
             })
             .await
         }
-    } {
-        Ok(()) => Ok(result),
-        Err(e) => Err(e),
     }
+}
+
+pub async fn update_content_hashes(
+    current: &mut ContentHashes,
+    path: PathBuf,
+    desired: ContentHashSet,
+) -> anyhow::Result<ContentHashSet> {
+    let mut current_types = ContentHashSet::empty();
+    if current.blake3.is_some() {
+        current_types |= ContentHashType::BLAKE3;
+    }
+    if current.extra_hashes.md5.is_some() {
+        current_types |= ContentHashType::MD5;
+    }
+    if current.extra_hashes.sha1.is_some() {
+        current_types |= ContentHashType::SHA1;
+    }
+    if current.extra_hashes.sha256.is_some() {
+        current_types |= ContentHashType::SHA256;
+    }
+
+    let to_compute = desired - current_types;
+    if to_compute != ContentHashSet::empty() {
+        () = apply_content_hashes(current, path, to_compute).await?;
+    }
+
+    Ok(to_compute)
 }
 
 pub async fn compute_blake3(path: PathBuf) -> anyhow::Result<Hash32> {

@@ -1,7 +1,13 @@
+use anyhow::Context;
 use clap::Args;
 use hex::ToHex;
 use photohash::hash;
+use photohash::hash::update_content_hashes;
+use photohash::hash::ContentHashSet;
+use photohash::hash::ContentHashType;
+use photohash::hash::ContentHashes;
 use photohash::model::ContentMetadata;
+use photohash::model::ExtraHashes;
 use photohash::model::FileInfo;
 use photohash::model::Hash32;
 use photohash::model::IMPath;
@@ -29,6 +35,9 @@ pub struct Index {
     #[arg(long)]
     json: bool,
 
+    #[arg(long)]
+    extra_hashes: bool,
+
     #[arg(required(true))]
     dirs: Vec<PathBuf>,
 }
@@ -38,6 +47,18 @@ struct JsonRecord {
     path: String,
     size: u64,
     blake3: String,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    extra_hashes: Option<JsonExtraHashes>,
+}
+
+#[derive(Serialize)]
+struct JsonExtraHashes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    md5: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha1: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
 }
 
 enum Seq<'a> {
@@ -65,6 +86,11 @@ impl Seq<'_> {
                     path: pfr.path.clone(),
                     size: content_metadata.file_info.size,
                     blake3: hex::encode(content_metadata.blake3),
+                    extra_hashes: pfr.extra_hashes.as_ref().map(|eh| JsonExtraHashes {
+                        md5: eh.md5.map(hex::encode),
+                        sha1: eh.sha1.map(hex::encode),
+                        sha256: eh.sha256.map(hex::encode),
+                    }),
                 })?;
                 Ok(())
             }
@@ -119,7 +145,7 @@ impl Index {
             self.dirs.iter().map(|p| p.as_ref()).collect()
         };
 
-        let mut metadata_rx = do_index(&db, &dirs)?;
+        let mut metadata_rx = do_index(&db, &dirs, self.extra_hashes)?;
 
         let _awake = match keepawake::Builder::default()
             .display(false)
@@ -154,6 +180,7 @@ impl Index {
                     continue;
                 }
             };
+
             seq.file(&pfr)?;
         }
 
@@ -166,6 +193,7 @@ impl Index {
 pub fn do_index(
     db: &Arc<Mutex<Database>>,
     dirs: &[&Path],
+    compute_extra_hashes: bool,
 ) -> anyhow::Result<mpsc::Receiver<JoinHandle<anyhow::Result<ProcessFileResult>>>> {
     let scanner = scan::get_default_scan();
     let path_meta_rx = scanner(dirs)?;
@@ -195,23 +223,14 @@ pub fn do_index(
                 }
             };
 
-            // Check the database to see if there's anything to recompute.
-            let db_metadata = match db.lock().unwrap().get_file(&path) {
-                Ok(record) => record,
-                Err(err) => {
-                    // TODO: propagate error
-                    eprintln!("failed to read record for {}, {}", path, err);
-                    continue;
-                }
-            };
-
             let metadata_future = tokio::spawn({
                 let db = db.clone();
                 let pixel_semaphore = pixel_semaphore.clone();
-                process_file(db, pixel_semaphore, path, metadata, db_metadata)
+                process_file(db, pixel_semaphore, path, metadata, compute_extra_hashes)
             });
 
             if let Err(_) = metadata_tx.send(metadata_future).await {
+                // Receiver stopped listening: abort.
                 return;
             }
         }
@@ -226,6 +245,8 @@ pub struct ProcessFileResult {
     pub content_metadata: ContentMetadata,
     pub image_metadata_computed: bool,
     pub image_metadata: Option<ImageMetadata>,
+    /// Only set if the indexing operation requests extra hashes.
+    pub extra_hashes: Option<ExtraHashes>,
 }
 
 impl ProcessFileResult {
@@ -247,38 +268,75 @@ async fn process_file(
     pixel_semaphore: Arc<Semaphore>,
     path: String,
     file_info: FileInfo,
-    db_metadata: Option<ContentMetadata>,
+    compute_extra_hashes: bool,
 ) -> anyhow::Result<ProcessFileResult> {
-    let mut blake3_computed = false;
+    // TODO: This all needs unit tests.
 
-    // TODO: only open the file once, and reuse it for any potential image hashing
-    let b3 = match db_metadata {
-        Some(ref record) => {
-            // If metadata matches our records, we can assume blake3 hasn't changed.
-            if file_info == record.file_info {
-                record.blake3
-            } else {
-                blake3_computed = true;
-                hash::compute_blake3(PathBuf::from(&path)).await?
+    // Check the database to see if there's anything to recompute.
+    let db_metadata = db
+        .lock()
+        .unwrap()
+        .get_file(&path)
+        .with_context(|| format!("failed to read record for {}", path))?;
+
+    let mut current_hashes = ContentHashes::default();
+    if db_metadata.as_ref().map(|m| m.file_info == file_info) == Some(true) {
+        // Existing hashes are valid.
+        current_hashes.blake3 = db_metadata.map(|m| m.blake3);
+    } else {
+        // Either we haven't indexed this file or the database's
+        // recorded blake3 does not match the current file.
+    }
+
+    // Do we have saved extra hashes?
+    if compute_extra_hashes {
+        if let Some(b3) = current_hashes.blake3 {
+            if let Some(extra_hashes) =
+                db.lock().unwrap().get_extra_hashes(&b3).with_context(|| {
+                    format!(
+                        "failed to read extra hashes for {}: {}",
+                        path,
+                        hex::encode(b3)
+                    )
+                })?
+            {
+                current_hashes.extra_hashes = extra_hashes;
             }
         }
-        None => {
-            // No record of this file - blake3 must be computed.
-            //eprintln!("computing blake3 of {}", path.display());
-            blake3_computed = true;
-            hash::compute_blake3(PathBuf::from(&path)).await?
-        }
-    };
+    }
+
+    // We always want blake3.
+    let mut desired_hashes = ContentHashSet::only(ContentHashType::BLAKE3);
+    if compute_extra_hashes {
+        desired_hashes |= ContentHashType::MD5 | ContentHashType::SHA1 | ContentHashType::SHA256;
+    }
+
+    // TODO: Only open the file once, and reuse it for any potential
+    // image hashing.
+    let computed_hashes =
+        update_content_hashes(&mut current_hashes, PathBuf::from(&path), desired_hashes).await?;
+    let b3 = current_hashes
+        .blake3
+        .expect("invariant: blake3 is always requested");
 
     let content_metadata = ContentMetadata {
         file_info,
         blake3: b3,
     };
 
+    let blake3_computed = computed_hashes.contains(ContentHashType::BLAKE3);
     if blake3_computed {
         db.lock()
             .unwrap()
             .add_files(&[(&path, &content_metadata)])?;
+    }
+
+    let extra_hashes_computed = computed_hashes
+        .is_superset(ContentHashType::MD5 | ContentHashType::SHA1 | ContentHashType::SHA256);
+    if extra_hashes_computed {
+        db.lock()
+            .unwrap()
+            .add_extra_hashes(&b3, &current_hashes.extra_hashes)?;
     }
 
     let mut image_metadata_computed = false;
@@ -328,5 +386,10 @@ async fn process_file(
         content_metadata,
         image_metadata_computed,
         image_metadata,
+        extra_hashes: if extra_hashes_computed {
+            Some(current_hashes.extra_hashes)
+        } else {
+            None
+        },
     })
 }
