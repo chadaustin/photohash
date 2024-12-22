@@ -56,7 +56,8 @@ pub async fn compute_image_hashes(path: &Path) -> Result<ImageMetadata, ImageMet
     // Get Exif
     let mut meta_ids: Vec<ItemId> = vec![0; 1];
     let count = handle.metadata_block_ids(&mut meta_ids, b"Exif");
-    assert_eq!(count, 1);
+    _ = count;
+    //assert_eq!(count, 1);
     /*
     let exif: Vec<u8> = handle.metadata(meta_ids[0])?;
     _ = exif;

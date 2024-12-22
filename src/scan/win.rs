@@ -196,7 +196,7 @@ pub struct Entry<'a> {
     attr: u32,
 }
 
-impl<'a> Entry<'a> {
+impl Entry<'_> {
     fn os_str(&self) -> OsString {
         OsString::from_wide(self.name)
     }
