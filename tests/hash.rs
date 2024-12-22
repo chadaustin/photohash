@@ -40,7 +40,7 @@ async fn saturn_v() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn blake3() -> anyhow::Result<()> {
-    let b3 = compute_blake3("tests//images/Moonlight.heic".into()).await?;
+    let b3 = compute_blake3("tests/images/Moonlight.heic".into()).await?;
     assert_eq!(
         "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
         hex::encode(b3)

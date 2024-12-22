@@ -380,16 +380,119 @@ async fn process_file(
             .add_image_metadata(&content_metadata.blake3, image_metadata.as_ref().unwrap())?;
     }
 
+    let has_extra_hashes = current_hashes.extra_hashes.md5.is_some()
+        && current_hashes.extra_hashes.sha1.is_some()
+        && current_hashes.extra_hashes.sha256.is_some();
+
     Ok(ProcessFileResult {
         path,
         blake3_computed,
         content_metadata,
         image_metadata_computed,
         image_metadata,
-        extra_hashes: if extra_hashes_computed {
+        extra_hashes: if has_extra_hashes {
             Some(current_hashes.extra_hashes)
         } else {
             None
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn process_file_computes_blake3() -> anyhow::Result<()> {
+        let db = Arc::new(Mutex::new(Database::open_memory()?));
+        let pixel_semaphore = Arc::new(Semaphore::new(1));
+        let file_info = FileInfo {
+            inode: 1,
+            size: 2,
+            mtime: SystemTime::now(),
+        };
+
+        let pfr = process_file(
+            db,
+            pixel_semaphore,
+            String::from("tests/images/Moonlight.heic"),
+            file_info,
+            false,
+        )
+        .await?;
+        assert_eq!(
+            "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
+            hex::encode(pfr.content_metadata.blake3)
+        );
+        assert_eq!(None, pfr.extra_hashes);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn process_file_extra_hashes_twice() -> anyhow::Result<()> {
+        let db = Arc::new(Mutex::new(Database::open_memory()?));
+        let pixel_semaphore = Arc::new(Semaphore::new(1));
+        let file_info = FileInfo {
+            inode: 1,
+            size: 2,
+            mtime: SystemTime::now(),
+        };
+
+        let pfr = process_file(
+            db.clone(),
+            pixel_semaphore.clone(),
+            "tests/images/Moonlight.heic".to_owned(),
+            file_info.clone(),
+            true,
+        )
+        .await?;
+        assert_eq!(
+            "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
+            hex::encode(pfr.content_metadata.blake3)
+        );
+        let extra_hashes = pfr.extra_hashes.as_ref();
+        assert_eq!(
+            Some("e5dae7611472d7102fc3a05a16152247".to_owned()),
+            extra_hashes.and_then(|eh| eh.md5).map(hex::encode)
+        );
+        assert_eq!(
+            Some("3260706646db71bb48cc4165e46410fde3e98a44".to_owned()),
+            extra_hashes.and_then(|eh| eh.sha1).map(hex::encode)
+        );
+        assert_eq!(
+            Some("d5b1055e3a5f5fc68d5a1ae706639f3cd1bd34349e6db7003e48cb11f755d3e8".to_owned()),
+            extra_hashes.and_then(|eh| eh.sha256).map(hex::encode)
+        );
+
+        // We should have saved this information in the database. Look it up again.
+        let pfr = process_file(
+            db,
+            pixel_semaphore,
+            "tests/images/Moonlight.heic".to_owned(),
+            file_info,
+            true,
+        )
+        .await?;
+        assert_eq!(
+            "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
+            hex::encode(pfr.content_metadata.blake3)
+        );
+        let extra_hashes = pfr.extra_hashes.as_ref();
+        assert_eq!(
+            Some("e5dae7611472d7102fc3a05a16152247".to_owned()),
+            extra_hashes.and_then(|eh| eh.md5).map(hex::encode)
+        );
+        assert_eq!(
+            Some("3260706646db71bb48cc4165e46410fde3e98a44".to_owned()),
+            extra_hashes.and_then(|eh| eh.sha1).map(hex::encode)
+        );
+        assert_eq!(
+            Some("d5b1055e3a5f5fc68d5a1ae706639f3cd1bd34349e6db7003e48cb11f755d3e8".to_owned()),
+            extra_hashes.and_then(|eh| eh.sha256).map(hex::encode)
+        );
+
+        Ok(())
+    }
 }
