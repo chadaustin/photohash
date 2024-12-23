@@ -1,5 +1,3 @@
-#![allow(clippy::let_unit_value)]
-
 use clap::Subcommand;
 
 mod benchmark;

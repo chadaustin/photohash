@@ -1,5 +1,3 @@
-#![allow(clippy::len_zero)]
-
 use crate::cmd::index;
 use anyhow::anyhow;
 use chrono::DateTime;
@@ -168,7 +166,7 @@ impl JwalkParStat {
                     cb = path_tx.send_vec(cb).unwrap();
                 }
             }
-            if cb.len() > 0 {
+            if !cb.is_empty() {
                 path_tx.send_vec(cb).unwrap();
             }
         });

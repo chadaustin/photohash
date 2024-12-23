@@ -1,6 +1,3 @@
-#![allow(clippy::len_zero)]
-#![allow(clippy::redundant_pattern_matching)]
-
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
@@ -160,7 +157,7 @@ fn jwalk_scan(
                 if paths.is_empty() {
                     return;
                 }
-                if let Err(_) = tx
+                let Ok(()) = tx
                     .send_iter(paths.into_iter().map(|(p, result)| match result {
                         Ok(()) => {
                             let metadata = std::fs::symlink_metadata(&p)
@@ -171,10 +168,10 @@ fn jwalk_scan(
                         Err(e) => (p, Err(e)),
                     }))
                     .await
-                {
+                else {
                     // Receiver dropped; we can early-exit.
                     return;
-                }
+                };
             }
         });
     }

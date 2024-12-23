@@ -1,6 +1,3 @@
-// TODO: fix
-#![allow(dead_code)]
-
 pub mod database;
 pub mod hash;
 pub mod iopool;

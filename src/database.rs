@@ -146,11 +146,6 @@ impl Database {
     fn conn(&self) -> &Connection {
         self.0.borrow_owner()
     }
-
-    #[allow(unused)]
-    fn conn_mut(&mut self) -> &Connection {
-        self.0.borrow_owner()
-    }
 }
 
 impl Database {
