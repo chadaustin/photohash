@@ -229,10 +229,10 @@ pub fn do_index(
                 process_file(db, pixel_semaphore, path, metadata, compute_extra_hashes)
             });
 
-            if let Err(_) = metadata_tx.send(metadata_future).await {
+            let Ok(()) = metadata_tx.send(metadata_future).await else {
                 // Receiver stopped listening: abort.
                 return;
-            }
+            };
         }
     });
 

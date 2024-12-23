@@ -1,5 +1,3 @@
-#![allow(clippy::redundant_pattern_matching)]
-
 use clap::Parser;
 
 mod cmd;
