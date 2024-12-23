@@ -17,6 +17,7 @@ use photohash::Database;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
+use tracing::trace;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -158,7 +159,7 @@ impl Index {
         {
             Ok(awake) => Some(awake),
             Err(e) => {
-                eprintln!("WARNING: keepawake failed, ignoring: {}", e);
+                trace!("WARNING: keepawake failed, ignoring: {}", e);
                 None
             }
         };

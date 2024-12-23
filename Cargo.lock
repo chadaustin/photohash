@@ -2293,6 +2293,7 @@ dependencies = [
  "static_assertions",
  "thiserror 2.0.9",
  "tokio",
+ "tracing",
  "turbojpeg",
  "vcpkg",
  "walkdir",

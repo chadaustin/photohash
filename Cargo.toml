@@ -78,6 +78,7 @@ sha2 = "0.10.8"
 static_assertions = "1.1.0"
 thiserror = "2.0.0"
 tokio = { version = "1.38", features = ["fs", "io-util", "macros", "rt-multi-thread", "sync"] }
+tracing = "0.1.41"
 turbojpeg = { version = "1.1.1", features = ["image"] }
 walkdir = "2.5.0"
 wild = "2.2.1"
