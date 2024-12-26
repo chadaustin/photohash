@@ -186,6 +186,7 @@ impl DirectoryHandle {
     }
 }
 
+#[allow(unused)]
 pub struct Entry<'a> {
     name: &'a [u16],
     btime: u64,
@@ -197,6 +198,7 @@ pub struct Entry<'a> {
 }
 
 impl Entry<'_> {
+    #[allow(unused)]
     fn os_str(&self) -> OsString {
         OsString::from_wide(self.name)
     }
