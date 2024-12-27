@@ -12,6 +12,7 @@ use ntapi::ntobapi::NtClose;
 use static_assertions::const_assert;
 use std::collections::VecDeque;
 use std::ffi::OsString;
+use std::fs;
 use std::io;
 use std::io::ErrorKind;
 use std::marker::PhantomData;
@@ -302,6 +303,8 @@ impl Entries<'_> {
 // onto equivalents when possible. We could support a new Error type
 // with a lossy conversion into io::Error.
 fn to_error_kind(status: NTSTATUS) -> ErrorKind {
+    // TODO: Use io::Error::from_raw_os_error
+    // But first we have to call RtlNtStatusToDosError
     match status {
         STATUS_SUCCESS => panic!("success"),
         STATUS_ALERTED => ErrorKind::Interrupted,
@@ -315,10 +318,57 @@ fn to_error_kind(status: NTSTATUS) -> ErrorKind {
         STATUS_INVALID_INFO_CLASS => ErrorKind::InvalidInput,
         STATUS_INVALID_HANDLE => ErrorKind::InvalidInput,
         STATUS_INVALID_PARAMETER => ErrorKind::InvalidInput,
+        STATUS_NOT_A_DIRECTORY => ErrorKind::NotADirectory,
         // ...
         // more?
         // TODO:
-        _ => ErrorKind::Other,
+
+        /*
+            NotFound,
+        PermissionDenied,
+        ConnectionRefused,
+        ConnectionReset,
+        HostUnreachable,
+        NetworkUnreachable,
+        ConnectionAborted,
+        NotConnected,
+        AddrInUse,
+        AddrNotAvailable,
+        NetworkDown,
+        BrokenPipe,
+        AlreadyExists,
+        WouldBlock,
+        NotADirectory,
+        IsADirectory,
+        DirectoryNotEmpty,
+        ReadOnlyFilesystem,
+        FilesystemLoop,
+        StaleNetworkFileHandle,
+        InvalidInput,
+        InvalidData,
+        TimedOut,
+        WriteZero,
+        StorageFull,
+        NotSeekable,
+        FilesystemQuotaExceeded,
+        FileTooLarge,
+        ResourceBusy,
+        ExecutableFileBusy,
+        Deadlock,
+        CrossesDevices,
+        TooManyLinks,
+        InvalidFilename,
+        ArgumentListTooLong,
+        Interrupted,
+        Unsupported,
+        UnexpectedEof,
+        OutOfMemory,
+        InProgress,
+        */
+        e => {
+            eprintln!("other error: {e}");
+            ErrorKind::Other
+        }
     }
 }
 
@@ -367,7 +417,27 @@ pub fn windows_scan(
             let mut queue = VecDeque::with_capacity(paths.len());
 
             for path in paths {
-                queue.push_back((None, path));
+                if path.is_dir() {
+                    queue.push_back((None, path));
+                } else {
+                    let Some(path) = path.to_str() else {
+                        eprintln!("{} not unicode", path.display());
+                        // TODO: We only support UTF-8 paths for now.
+                        continue;
+                    };
+                    match fs::metadata(path) {
+                        Ok(metadata) => {
+                            meta_tx
+                                .send((path.to_owned(), Ok(metadata.into())))
+                                .expect("failed to send");
+                        }
+                        Err(e) => {
+                            meta_tx
+                                .send((path.to_owned(), Err(e.into())))
+                                .expect("failed to send");
+                        }
+                    }
+                }
             }
 
             while let Some((handle, path)) = queue.pop_front() {
@@ -382,7 +452,7 @@ pub fn windows_scan(
                     None => match DirectoryHandle::open(path) {
                         Ok(handle) => handle,
                         Err(e) => {
-                            eprintln!("error opening handle: {}", path);
+                            eprintln!("error opening handle: {} {}", path, e);
                             meta_tx
                                 .send((path.to_string(), Err(e.into())))
                                 .expect("failed to send");

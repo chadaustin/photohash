@@ -3,4 +3,5 @@ set -e
 cd "${BASH_SOURCE%/*}"/..
 
 cargo +nightly fmt
+cargo check --all-targets
 cargo clippy

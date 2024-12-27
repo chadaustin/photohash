@@ -17,7 +17,6 @@ use photohash::Database;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
-use tracing::trace;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,6 +25,7 @@ use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
+use tracing::trace;
 
 const RESULT_CHANNEL_SIZE: usize = 8;
 const TRACE_INVALID_PHOTOS: bool = false;
@@ -240,6 +240,7 @@ pub fn do_index(
     Ok(metadata_rx)
 }
 
+#[derive(Debug)]
 pub struct ProcessFileResult {
     pub path: IMPath,
     pub blake3_computed: bool,
@@ -494,6 +495,22 @@ mod tests {
             extra_hashes.and_then(|eh| eh.sha256).map(hex::encode)
         );
 
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn index_single_file() -> anyhow::Result<()> {
+        let db = Arc::new(Mutex::new(Database::open_memory()?));
+        let mut receiver = do_index(&db, &[&Path::new("tests/images/Moonlight.heic")], true)?;
+        let pfr: ProcessFileResult = receiver.recv().await.expect("must be one item").await??;
+        assert!(pfr.blake3_computed);
+        assert_eq!(
+            "d8828886771faa4da22c36c352acdbf0988f780b457dd8525499a3f2153a25d5",
+            hex::encode(pfr.content_metadata.blake3)
+        );
+        assert!(receiver.recv().await.is_none());
+
+        //assert_eq!(None, e);
         Ok(())
     }
 }
