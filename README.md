@@ -13,9 +13,10 @@ sudo apt install -y libheif-dev
 
 ## Windows
 
+Install CMake and nasm.exe.
+
 ```
 cargo install cargo-vcpkg
 cargo vcpkg build
-export VCPKGRS_DYNAMIC=1
 cargo build
 ```
