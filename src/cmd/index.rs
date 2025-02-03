@@ -21,6 +21,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use superconsole::SuperConsole;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
@@ -64,6 +65,7 @@ struct JsonExtraHashes {
 
 enum Seq<'a> {
     Stdout,
+    Tty(SuperConsole),
     JsonSerde(<&'a mut serde_json::Serializer<std::io::Stdout> as serde::Serializer>::SerializeSeq),
 }
 
@@ -80,6 +82,19 @@ impl Seq<'_> {
                         &dunce::simplified(pfr.path.as_ref()).display(),
                     );
                 }
+                Ok(())
+            }
+            Seq::Tty(sc) => {
+                use superconsole::Lines;
+                use superconsole::Line;
+                use superconsole::components::Blank;
+                sc.emit(Lines(vec![Line::unstyled(&format!(
+                    "{} {:>8}K {}",
+                    content_metadata.blake3.encode_hex::<String>(),
+                    content_metadata.file_info.size / 1024,
+                    &dunce::simplified(pfr.path.as_ref()).display(),
+                ))?]));
+                sc.render(&Blank)?;
                 Ok(())
             }
             Seq::JsonSerde(seq) => {
@@ -101,6 +116,9 @@ impl Seq<'_> {
     fn end(self) -> anyhow::Result<()> {
         match self {
             Seq::Stdout => {}
+            Seq::Tty(sc) => {
+                sc.finalize(&superconsole::components::Blank)?;
+            }
             Seq::JsonSerde(seq) => seq.end()?,
         }
         Ok(())
@@ -112,9 +130,18 @@ trait OutputMode {
 }
 
 struct StdoutMode;
+
 impl OutputMode for StdoutMode {
     fn start(&mut self) -> anyhow::Result<Seq<'_>> {
         Ok(Seq::Stdout)
+    }
+}
+
+struct TtyMode(Option<SuperConsole>);
+
+impl OutputMode for TtyMode {
+    fn start(&mut self) -> anyhow::Result<Seq<'_>> {
+        Ok(Seq::Tty(self.0.take().expect("cannot start TtyMode twice")))
     }
 }
 
@@ -166,10 +193,11 @@ impl Index {
 
         let mut output: Box<dyn OutputMode> = if self.json {
             Box::new(JsonMode::new())
+        } else if let Some(sc) = SuperConsole::new() {
+            Box::new(TtyMode(Some(sc)))
         } else {
             Box::new(StdoutMode)
         };
-
         let mut seq = output.start()?;
 
         while let Some(content_metadata_future) = metadata_rx.recv().await {
