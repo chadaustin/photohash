@@ -64,7 +64,7 @@ itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
 kamadak-exif = "0.6.1"
 keepawake = "0.5.1"
-libheif-rs = { version = "1.0.2", default-features = false }
+libheif-rs = { version = ">=1.0.2, <1.1.0", default-features = false }
 md-5 = "0.10.6"
 ntapi = "0.4.1"
 rand = "0.8.5"
