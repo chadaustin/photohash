@@ -85,9 +85,9 @@ impl Seq<'_> {
                 Ok(())
             }
             Seq::Tty(sc) => {
-                use superconsole::Lines;
-                use superconsole::Line;
                 use superconsole::components::Blank;
+                use superconsole::Line;
+                use superconsole::Lines;
                 sc.emit(Lines(vec![Line::unstyled(&format!(
                     "{} {:>8}K {}",
                     content_metadata.blake3.encode_hex::<String>(),
