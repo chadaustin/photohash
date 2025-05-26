@@ -36,7 +36,7 @@ debug = true
 vcpkg = "0.2.15"
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
 
 [[bench]]
 name = "databasebench"
