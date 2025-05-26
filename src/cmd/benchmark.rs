@@ -393,7 +393,7 @@ impl Hashes {
 
         const BUF_SIZE: usize = 64 * 1024;
         let mut buf = [0u8; BUF_SIZE];
-        rand::thread_rng().fill_bytes(&mut buf);
+        rand::rng().fill_bytes(&mut buf);
 
         let start = Instant::now();
         let until = start + Duration::from_secs(5);

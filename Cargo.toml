@@ -67,7 +67,7 @@ keepawake = "0.5.1"
 libheif-rs = { version = ">=1.0.2, <1.1.0", default-features = false }
 md-5 = "0.10.6"
 ntapi = "0.4.1"
-rand = "0.8.5"
+rand = "0.9.1"
 rayon = "1.10.0"
 rusqlite_migration = "2.1.0"
 self_cell = "1.0.4"
