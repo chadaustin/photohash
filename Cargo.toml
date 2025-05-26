@@ -52,7 +52,7 @@ blockhash = "1.0.0"
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
 digest = "0.10.7"
-directories = "5"
+directories = "6.0.0"
 dunce = "1.0.5"
 enumset = "1.1.5"
 futures = "0.3"
