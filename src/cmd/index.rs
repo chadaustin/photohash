@@ -28,6 +28,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tracing::trace;
 
+// TODO: Introduce PhotohashConfig
 const RESULT_CHANNEL_SIZE: usize = 8;
 const TRACE_INVALID_PHOTOS: bool = false;
 

@@ -9,6 +9,7 @@ mod find;
 mod hash;
 mod index;
 mod separate;
+mod validate;
 
 #[derive(Subcommand)]
 pub enum MainCommand {
@@ -23,6 +24,7 @@ pub enum MainCommand {
     Hash(hash::Hash),
     Index(index::Index),
     Separate(separate::Separate),
+    Validate(validate::Validate),
 }
 
 impl MainCommand {
@@ -37,6 +39,7 @@ impl MainCommand {
             MainCommand::Hash(cmd) => cmd.run().await,
             MainCommand::Index(cmd) => cmd.run().await,
             MainCommand::Separate(cmd) => cmd.run().await,
+            MainCommand::Validate(cmd) => cmd.run().await,
         }
     }
 }
