@@ -40,7 +40,7 @@ impl Validate {
         for vr in results {
             let vr = vr.await??;
             if let Some(vr) = vr {
-                println!("{} validation failure: {:?}", vr.path, vr.reason);
+                println!("{:?}: {}", vr.reason, vr.path);
                 failures += 1;
             }
         }
