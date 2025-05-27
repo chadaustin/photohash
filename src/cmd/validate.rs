@@ -120,6 +120,13 @@ async fn validate_file(
         return Ok(None);
     };
 
+    // This is not the correct place to acquire the pixel semaphore.
+    // But if we don't limit blake3 as well as the image hashes, a
+    // bunch of parallel tasks read the file contents, then block on
+    // the semaphore, and then have to reread it after it's out of
+    // cache.
+    let _permit = pixel_semaphore.acquire().await;
+
     let blake3 = compute_blake3(PathBuf::from(path)).await?;
     if blake3 != content_metadata.blake3 {
         return Ok(Some(ValidateResult {
@@ -127,8 +134,6 @@ async fn validate_file(
             reason: ValidationReason::Blake3Mismatch,
         }));
     }
-
-    let _permit = pixel_semaphore.acquire().await;
 
     let image_metadata = db
         .lock()
