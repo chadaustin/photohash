@@ -1,3 +1,4 @@
+use super::index::PixelSemaphore;
 use clap::Args;
 use photohash::hash::compute_blake3;
 use photohash::hash::compute_image_hashes;
@@ -75,6 +76,8 @@ fn do_validate(
 
     let db = db.clone();
     tokio::spawn(async move {
+        let pixel_semaphore = PixelSemaphore::new().await;
+
         while let Some((path, _metadata)) = path_meta_rx.recv().await {
             // TODO: validate stored metadata too?
             /*
@@ -90,8 +93,9 @@ fn do_validate(
 
             let validate_future = tokio::spawn({
                 let db = db.clone();
+                let pixel_semaphore = pixel_semaphore.clone();
                 let path = path.to_owned();
-                async move { validate_file(&db, &path).await }
+                async move { validate_file(&db, pixel_semaphore, &path).await }
             });
             #[allow(clippy::redundant_pattern_matching)]
             if let Err(_) = validate_tx.send(validate_future) {
@@ -106,6 +110,7 @@ fn do_validate(
 
 async fn validate_file(
     db: &Arc<Mutex<Database>>,
+    pixel_semaphore: PixelSemaphore,
     path: &str,
 ) -> anyhow::Result<Option<ValidateResult>> {
     // Read from the database
@@ -122,6 +127,8 @@ async fn validate_file(
             reason: ValidationReason::Blake3Mismatch,
         }));
     }
+
+    let _permit = pixel_semaphore.acquire().await;
 
     let image_metadata = db
         .lock()

@@ -24,6 +24,7 @@ use std::sync::Mutex;
 use superconsole::SuperConsole;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tracing::trace;
@@ -238,6 +239,40 @@ impl Index {
     }
 }
 
+// Limit the number of concurrent perceptual hashes, since
+// keeping pixel data in RAM is expensive.
+#[derive(Clone)]
+pub struct PixelSemaphore {
+    inner: Arc<Semaphore>,
+}
+
+impl PixelSemaphore {
+    pub async fn new() -> Self {
+        // TODO: To actually bound memory usage while maximizing CPU
+        // utilization, use a semaphore with number-of-pixels count
+        // and acquire width*height permits after reading the image
+        // header.
+        let count = 4 * Handle::current().metrics().num_workers();
+        Self {
+            inner: Arc::new(Semaphore::new(count)),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn test() -> Self {
+        Self {
+            inner: Arc::new(Semaphore::new(1)),
+        }
+    }
+
+    pub async fn acquire(self) -> OwnedSemaphorePermit {
+        self.inner
+            .acquire_owned()
+            .await
+            .expect("Pixel semaphores are never closed")
+    }
+}
+
 pub fn do_index(
     db: &Arc<Mutex<Database>>,
     dirs: &[&Path],
@@ -251,15 +286,7 @@ pub fn do_index(
     // Reads enumerated paths and computes necessary file metadata and content hashes.
     let db = db.clone();
     tokio::spawn(async move {
-        // Limit the number of concurrent perceptual hashes, since
-        // keeping pixel data in RAM is expensive.
-        //
-        // TODO: To actually bound memory usage while maximizing CPU
-        // utilization, use a semaphore with number-of-pixels count
-        // and acquire width*height permits after reading the image
-        // header.
-        let pixel_semaphore_count = 4 * Handle::current().metrics().num_workers();
-        let pixel_semaphore = Arc::new(Semaphore::new(pixel_semaphore_count));
+        let pixel_semaphore = PixelSemaphore::new().await;
 
         while let Some((path, metadata)) = path_meta_rx.recv().await {
             let metadata = match metadata {
@@ -314,7 +341,7 @@ impl ProcessFileResult {
 
 async fn process_file(
     db: Arc<Mutex<Database>>,
-    pixel_semaphore: Arc<Semaphore>,
+    pixel_semaphore: PixelSemaphore,
     path: String,
     file_info: FileInfo,
     compute_extra_hashes: bool,
@@ -393,7 +420,7 @@ async fn process_file(
     if hash::may_have_metadata(&path, &content_metadata.file_info) {
         image_metadata = db.lock().unwrap().get_image_metadata(&b3)?;
         if image_metadata.is_none() {
-            let _permit = pixel_semaphore.clone().acquire_owned().await?;
+            let _permit = pixel_semaphore.clone().acquire().await;
 
             match hash::compute_image_hashes(&path).await {
                 Ok(im) => {
@@ -455,7 +482,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn process_file_computes_blake3() -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open_memory()?));
-        let pixel_semaphore = Arc::new(Semaphore::new(1));
+        let pixel_semaphore = PixelSemaphore::test();
         let file_info = FileInfo {
             inode: 1,
             size: 2,
@@ -482,7 +509,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn process_file_extra_hashes_twice() -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open_memory()?));
-        let pixel_semaphore = Arc::new(Semaphore::new(1));
+        let pixel_semaphore = PixelSemaphore::test();
         let file_info = FileInfo {
             inode: 1,
             size: 2,
