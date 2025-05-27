@@ -20,6 +20,8 @@ impl Broken {
 
         let dirs: Vec<_> = self.dirs.iter().map(|d| d.as_ref()).collect();
 
+        let mut discrepancy_count: u64 = 0;
+
         let mut metadata_rx = do_index(&db, &dirs, false)?;
         while let Some(pfr_future) = metadata_rx.recv().await {
             let pfr = pfr_future.await??;
@@ -32,6 +34,7 @@ impl Broken {
                 match hash::compute_image_hashes(&pfr.path).await {
                     Ok(_im) => {
                         println!("{}: recorded as failed photo but looks valid now", path);
+                        discrepancy_count += 1;
                     }
                     Err(hash::ImageMetadataError::UnsupportedPhoto { source, .. }) => {
                         if let Some(source) = source {
@@ -42,12 +45,17 @@ impl Broken {
                         } else {
                             println!("{}: invalid photo with missing root cause", path);
                         }
+                        discrepancy_count += 1;
                     }
                     Err(e) => {
                         return Err(e.into());
                     }
                 }
             }
+        }
+
+        if discrepancy_count > 0 {
+            anyhow::bail!("{discrepancy_count} discrepancies found");
         }
 
         Ok(())

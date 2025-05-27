@@ -35,7 +35,7 @@ impl Validate {
 
         let _awake = awake::keep_awake("validating files");
 
-        let mut failures: usize = 0;
+        let mut failures: u64 = 0;
 
         for vr in results {
             let vr = vr.await??;
