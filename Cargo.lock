@@ -2617,7 +2617,7 @@ dependencies = [
 
 [[package]]
 name = "photohash"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "arrayvec",
