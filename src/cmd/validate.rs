@@ -12,6 +12,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::task::JoinHandle;
+use tracing::trace;
 
 #[derive(Args)]
 #[command(about = "Validate that files in directories match previously-indexed hashes")]
@@ -59,10 +60,10 @@ struct ValidateResult {
     reason: ValidationReason,
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 enum ValidationReason {
     Blake3Mismatch,
+    FailedDecode,
     DimensionsMismatch,
     JpegRothashMismatch,
     Blockhash256Mismatch,
@@ -151,12 +152,21 @@ async fn validate_file(
         && image_metadata.jpegrothash.is_none()
         && image_metadata.blockhash256.is_none()
     {
-        // No need to compute any image hashes.
-        println!("no image metadata: {path}");
+        // This is the result of a bug in photohash where no image
+        // metadata is available and yet the row was stored in the
+        // database.
+        //
+        // There's no need to compute any image hashes.
+        trace!("no image metadata: {path}");
         return Ok(None);
     }
 
-    let image_hashes = compute_image_hashes(path).await?;
+    let Ok(image_hashes) = compute_image_hashes(path).await else {
+        return Ok(Some(ValidateResult {
+            path: path.to_owned(),
+            reason: ValidationReason::FailedDecode,
+        }));
+    };
 
     if image_hashes.dimensions != image_metadata.dimensions {
         return Ok(Some(ValidateResult {
