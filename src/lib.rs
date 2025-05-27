@@ -1,3 +1,4 @@
+pub mod awake;
 pub mod database;
 pub mod hash;
 pub mod iopool;

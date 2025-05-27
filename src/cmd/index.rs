@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::Args;
 use hex::ToHex;
+use photohash::awake;
 use photohash::hash;
 use photohash::hash::update_content_hashes;
 use photohash::hash::ContentHashSet;
@@ -27,7 +28,6 @@ use tokio::sync::mpsc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tracing::trace;
 
 // TODO: Introduce PhotohashConfig
 const RESULT_CHANNEL_SIZE: usize = 8;
@@ -195,21 +195,7 @@ impl Index {
 
         let mut metadata_rx = do_index(&db, &dirs, self.extra_hashes)?;
 
-        let _awake = match keepawake::Builder::default()
-            .display(false)
-            .idle(true)
-            .sleep(true)
-            .reason("indexing files")
-            .app_name("imagehash")
-            .app_reverse_domain("me.chadaustin.imagehash")
-            .create()
-        {
-            Ok(awake) => Some(awake),
-            Err(e) => {
-                trace!("WARNING: keepawake failed, ignoring: {}", e);
-                None
-            }
-        };
+        let _awake = awake::keep_awake("indexing files");
 
         let mut output: Box<dyn OutputMode> = if self.json {
             Box::new(JsonMode::new())

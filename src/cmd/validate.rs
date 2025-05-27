@@ -1,5 +1,6 @@
 use super::index::PixelSemaphore;
 use clap::Args;
+use photohash::awake;
 use photohash::hash::compute_blake3;
 use photohash::hash::compute_image_hashes;
 use photohash::model::IMPath;
@@ -31,6 +32,8 @@ impl Validate {
 
         let dirs: Vec<&Path> = self.srcs.iter().map(|p| p.as_ref()).collect();
         let results = do_validate(&db, &dirs)?;
+
+        let _awake = awake::keep_awake("validating files");
 
         let mut failures: usize = 0;
 
