@@ -58,7 +58,7 @@ enumset = "1.1.5"
 futures = "0.3"
 hex = "0.4.3"
 image = { version = "0.25.2", features = [] }
-image_hasher = "2.0.0"
+image_hasher = "3.0.0"
 indoc = "2.0.5"
 itermore = { version = "0.7.1", features = ["array_chunks"] }
 jwalk = "0.8.1"
