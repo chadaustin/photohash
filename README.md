@@ -1,14 +1,26 @@
 # Building
 
-## Ubuntu
+## Ubuntu 24.04
 
 ```
-sudo apt install -y cmake nasm libsqlite3-dev pkg-config
+sudo apt install -y build-essential cmake nasm pkg-config libheif-dev libsqlite3-dev libz-dev
+```
+
+## Ubuntu 22.04
+
+```
+sudo apt install -y build-essential cmake nasm pkg-config libsqlite3-dev
 
 sudo add-apt-repository ppa:strukturag/libheif
 sudo add-apt-repository ppa:strukturag/libde265
 sudo apt update
 sudo apt install -y libheif-dev
+```
+
+## Debian
+
+```
+sudo apt install -y build-essential cmake nasm pkg-config libheif-dev libsqlite3-dev
 ```
 
 ## Windows
