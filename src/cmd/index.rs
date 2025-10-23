@@ -122,13 +122,15 @@ impl OutputSequence<'_> for TtySequence {
         use superconsole::components::Blank;
         use superconsole::Line;
         use superconsole::Lines;
-        sc.emit(Lines(vec![Line::unstyled(&format!(
-            "{} {:>8}K {}",
-            content_metadata.blake3.encode_hex::<String>(),
-            content_metadata.file_info.size / 1024,
-            &dunce::simplified(pfr.path.as_ref()).display(),
-        ))?]));
-        sc.render(&Blank)?;
+        if pfr.blake3_computed || pfr.image_metadata_computed {
+            sc.emit(Lines(vec![Line::unstyled(&format!(
+                "{} {:>8}K {}",
+                content_metadata.blake3.encode_hex::<String>(),
+                content_metadata.file_info.size / 1024,
+                &dunce::simplified(pfr.path.as_ref()).display(),
+            ))?]));
+            sc.render(&Blank)?;
+        }
         Ok(())
     }
 
