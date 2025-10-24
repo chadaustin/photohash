@@ -2,4 +2,4 @@
 set -e
 cd "${BASH_SOURCE%/*}"/..
 
-cargo outdated -x rusqlite -d 1
+cargo outdated -d 1

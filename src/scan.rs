@@ -1,7 +1,6 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
-use futures::FutureExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -43,46 +42,43 @@ fn walkdir_scan(
     // crawl has gotten too far ahead.
     let (tx, rx) = batch_channel::bounded(META_CHANNEL_CAPACITY);
 
-    tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, |tx| {
-        async move {
-            // TODO: walk each path in parallel.
-            for path in paths {
-                for entry in walkdir::WalkDir::new(path)
-                    .follow_links(false)
-                    .same_file_system(true)
-                {
-                    let e = match entry {
-                        Ok(e) => e,
-                        Err(e) => {
-                            // If we have a path, propagate the error.
-                            if let Some(path) = e.path().and_then(|p| p.to_str()) {
-                                tx.send((path.to_string(), Err(e.into()))).await?;
-                            } else {
-                                // No path or non-unicode path. Be conservative for now and panic.
-                                // It would be unfortunate to delete records because a scan temporarily failed.
-                                panic!("Unexpected error from walkdir: {}", e);
-                            }
-                            continue;
+    tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, async move |tx| {
+        // TODO: walk each path in parallel.
+        for path in paths {
+            for entry in walkdir::WalkDir::new(path)
+                .follow_links(false)
+                .same_file_system(true)
+            {
+                let e = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        // If we have a path, propagate the error.
+                        if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                            tx.send((path.to_string(), Err(e.into()))).await?;
+                        } else {
+                            // No path or non-unicode path. Be conservative for now and panic.
+                            // It would be unfortunate to delete records because a scan temporarily failed.
+                            panic!("Unexpected error from walkdir: {}", e);
                         }
-                    };
-                    if !e.file_type().is_file() {
                         continue;
                     }
-                    let Some(path) = e.path().to_str().map(String::from) else {
-                        // Skip non-unicode paths.
-                        continue;
-                    };
-
-                    // The serial scan primarily exists because WSL1 fast-paths the
-                    // readdir, serial stat access pattern. It's significantly faster
-                    // than a parallel crawl and random access stat pattern.
-                    let metadata = e.metadata().map_err(anyhow::Error::from);
-                    tx.send((path, metadata.map(From::from))).await?;
+                };
+                if !e.file_type().is_file() {
+                    continue;
                 }
+                let Some(path) = e.path().to_str().map(String::from) else {
+                    // Skip non-unicode paths.
+                    continue;
+                };
+
+                // The serial scan primarily exists because WSL1 fast-paths the
+                // readdir, serial stat access pattern. It's significantly faster
+                // than a parallel crawl and random access stat pattern.
+                let metadata = e.metadata().map_err(anyhow::Error::from);
+                tx.send((path, metadata.map(From::from))).await?;
             }
-            Ok(())
         }
-        .boxed()
+        Ok(())
     }));
 
     Ok(rx)
@@ -106,44 +102,41 @@ fn jwalk_scan(
 
     for path in paths {
         let tx = path_tx.clone();
-        tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, |tx| {
-            async move {
-                // No same_file_system option. https://github.com/Byron/jwalk/issues/27
-                for entry in jwalk::WalkDir::new(&path)
-                    .skip_hidden(false)
-                    .sort(false)
-                    .follow_links(false)
-                    .parallelism(jwalk::Parallelism::RayonDefaultPool {
-                        busy_timeout: std::time::Duration::from_secs(300),
-                    })
-                {
-                    let e = match entry {
-                        Ok(e) => e,
-                        Err(e) => {
-                            // If we have a path, propagate the error.
-                            if let Some(path) = e.path().and_then(|p| p.to_str()) {
-                                tx.send((path.to_string(), Err(e.into()))).await?;
-                            } else {
-                                // No path or non-unicode path. Be conservative for now and panic.
-                                // It would be unfortunate to delete records because a scan temporarily failed.
-                                panic!("Unexpected error from jwalk: {}", e);
-                            }
-                            continue;
+        tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, async move |tx| {
+            // No same_file_system option. https://github.com/Byron/jwalk/issues/27
+            for entry in jwalk::WalkDir::new(&path)
+                .skip_hidden(false)
+                .sort(false)
+                .follow_links(false)
+                .parallelism(jwalk::Parallelism::RayonDefaultPool {
+                    busy_timeout: std::time::Duration::from_secs(300),
+                })
+            {
+                let e = match entry {
+                    Ok(e) => e,
+                    Err(e) => {
+                        // If we have a path, propagate the error.
+                        if let Some(path) = e.path().and_then(|p| p.to_str()) {
+                            tx.send((path.to_string(), Err(e.into()))).await?;
+                        } else {
+                            // No path or non-unicode path. Be conservative for now and panic.
+                            // It would be unfortunate to delete records because a scan temporarily failed.
+                            panic!("Unexpected error from jwalk: {}", e);
                         }
-                    };
-                    if !e.file_type().is_file() {
                         continue;
                     }
-                    let Some(path) = e.path().to_str().map(String::from) else {
-                        // Skip non-unicode paths.
-                        continue;
-                    };
-
-                    tx.send((path, Ok(()))).await?;
+                };
+                if !e.file_type().is_file() {
+                    continue;
                 }
-                Ok(())
+                let Some(path) = e.path().to_str().map(String::from) else {
+                    // Skip non-unicode paths.
+                    continue;
+                };
+
+                tx.send((path, Ok(()))).await?;
             }
-            .boxed()
+            Ok(())
         }));
     }
     drop(path_tx);
