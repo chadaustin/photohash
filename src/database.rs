@@ -279,14 +279,12 @@ impl Database {
             }
 
             // TODO: Add bulk select variants for all chunk sizes.
-            if let Some(remainder) = chunks.into_remainder() {
-                for path in remainder {
-                    results.push(
-                        stmt.get_file
-                            .query_row((path,), Self::file_from_single_row)
-                            .optional()?,
-                    );
-                }
+            for path in chunks.into_remainder() {
+                results.push(
+                    stmt.get_file
+                        .query_row((path,), Self::file_from_single_row)
+                        .optional()?,
+                );
             }
 
             assert_eq!(results.len(), paths.len());

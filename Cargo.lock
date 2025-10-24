@@ -1610,9 +1610,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itermore"
-version = "0.7.1"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed0daf803a3818d3693fe1fdd82d8ac0f41d0ea3f05709d5e144c4eb2b85ba5"
+checksum = "ac87f762608cc2efb6f8f45e419c5047daa2e781a7b57b2ed1b30abf55549e06"
 dependencies = [
  "arrays",
 ]
