@@ -1,6 +1,6 @@
 [package]
 name = "photohash"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Chad Austin <chad@chadaustin.me>"]
 edition = "2021"
 rust-version = "1.83"
