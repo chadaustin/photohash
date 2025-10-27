@@ -1,5 +1,5 @@
-use crate::cmd::index;
 use clap::Args;
+use photohash::index::do_index;
 use photohash::model::Hash32;
 use photohash::model::IMPath;
 use photohash::Database;
@@ -128,7 +128,7 @@ pub async fn index_destination(
 
     eprint!("scanning destination...");
     let mut dots = Dots::new();
-    let mut dst_rx = index::do_index(db, dests, false)?;
+    let mut dst_rx = do_index(db, dests, false)?;
     while let Some(pfr_future) = dst_rx.recv().await {
         dots.increment();
 
@@ -178,7 +178,7 @@ pub async fn compute_difference(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = index::do_index(db, &[&src], false)?;
+    let mut src_rx = do_index(db, &[&src], false)?;
 
     // Scan the destination(s) and build hash tables.
     let index =

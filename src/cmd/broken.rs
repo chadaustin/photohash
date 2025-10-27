@@ -1,6 +1,6 @@
-use crate::cmd::index::do_index;
 use clap::Args;
 use photohash::hash;
+use photohash::index::do_index;
 use photohash::Database;
 use std::path::PathBuf;
 use std::sync::Arc;

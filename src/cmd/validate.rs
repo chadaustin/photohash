@@ -1,8 +1,8 @@
-use super::index::PixelSemaphore;
 use clap::Args;
 use photohash::awake;
 use photohash::hash::compute_blake3;
 use photohash::hash::compute_image_hashes;
+use photohash::index::PixelSemaphore;
 use photohash::model::IMPath;
 use photohash::scan;
 use photohash::Database;

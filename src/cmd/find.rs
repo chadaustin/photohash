@@ -1,6 +1,6 @@
 use crate::cmd::diff::index_destination;
-use crate::cmd::index;
 use clap::Args;
+use photohash::index::do_index;
 use photohash::Database;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ async fn find_matching(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = index::do_index(db, &[&src], false)?;
+    let mut src_rx = do_index(db, &[&src], false)?;
 
     // Scan the destination(s) and build hash tables.
     let index =

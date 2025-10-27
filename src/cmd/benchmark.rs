@@ -1,4 +1,3 @@
-use crate::cmd::index;
 use anyhow::anyhow;
 use chrono::DateTime;
 use chrono::Local;
@@ -9,6 +8,7 @@ use photohash::database::Database;
 use photohash::hash::get_hasher;
 use photohash::hash::ContentHashSet;
 use photohash::hash::ContentHashType;
+use photohash::index::do_index;
 use photohash::index::ProcessFileResult;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
@@ -271,7 +271,7 @@ impl Index {
 
         let mut pfr_results = 0;
 
-        let mut rx = index::do_index(&db, &[&self.path], false)?;
+        let mut rx = do_index(&db, &[&self.path], false)?;
         while let Some(jh) = rx.recv().await {
             let _: ProcessFileResult = jh.await.unwrap()?;
             pfr_results += 1;
