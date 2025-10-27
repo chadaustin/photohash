@@ -18,7 +18,8 @@ pub type IMPath = String;
 ///
 /// TODO: Restic makes a good case that ctime should also be included
 /// in this set. We should backfill.
-/// https://restic.readthedocs.io/en/latest/040_backup.html#file-change-detection
+///
+/// <https://restic.readthedocs.io/en/latest/040_backup.html#file-change-detection>
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileInfo {
     /// 0 on Windows for now. May contain file_index() when the API is
