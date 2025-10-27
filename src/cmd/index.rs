@@ -7,11 +7,9 @@ use photohash::hash::update_content_hashes;
 use photohash::hash::ContentHashSet;
 use photohash::hash::ContentHashType;
 use photohash::hash::ContentHashes;
+use photohash::index::ProcessFileResult;
 use photohash::model::ContentMetadata;
-use photohash::model::ExtraHashes;
 use photohash::model::FileInfo;
-use photohash::model::Hash32;
-use photohash::model::IMPath;
 use photohash::model::ImageMetadata;
 use photohash::scan;
 use photohash::Database;
@@ -300,31 +298,6 @@ pub fn do_index(
     });
 
     Ok(metadata_rx)
-}
-
-#[derive(Debug)]
-pub struct ProcessFileResult {
-    pub path: IMPath,
-    pub blake3_computed: bool,
-    pub content_metadata: ContentMetadata,
-    pub image_metadata_computed: bool,
-    pub image_metadata: Option<ImageMetadata>,
-    /// Only set if the indexing operation requests extra hashes.
-    pub extra_hashes: Option<ExtraHashes>,
-}
-
-impl ProcessFileResult {
-    pub fn blockhash256(&self) -> Option<&Hash32> {
-        self.image_metadata
-            .as_ref()
-            .and_then(|im| im.blockhash256.as_ref())
-    }
-
-    pub fn jpegrothash(&self) -> Option<&Hash32> {
-        self.image_metadata
-            .as_ref()
-            .and_then(|im| im.jpegrothash.as_ref())
-    }
 }
 
 async fn process_file(

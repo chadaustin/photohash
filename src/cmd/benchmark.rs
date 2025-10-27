@@ -9,6 +9,7 @@ use photohash::database::Database;
 use photohash::hash::get_hasher;
 use photohash::hash::ContentHashSet;
 use photohash::hash::ContentHashType;
+use photohash::index::ProcessFileResult;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
 use photohash::scan;
@@ -272,7 +273,7 @@ impl Index {
 
         let mut rx = index::do_index(&db, &[&self.path], false)?;
         while let Some(jh) = rx.recv().await {
-            let _: index::ProcessFileResult = jh.await.unwrap()?;
+            let _: ProcessFileResult = jh.await.unwrap()?;
             pfr_results += 1;
         }
 
