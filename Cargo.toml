@@ -23,7 +23,7 @@ path = "src/main.rs"
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
-rev = "7618666e79df4aca28a6d6343492f4b8af740e38"
+rev = "499233b1e3e2ee33a0a7afabfb57143f695e7806"
 dependencies = [
     "libheif:x64-windows-static-md",
 ]
