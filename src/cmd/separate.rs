@@ -1,12 +1,9 @@
 use crate::cmd::diff::compute_difference;
 use anyhow::bail;
 use clap::Args;
-use clap::ValueEnum;
 use photohash::Database;
-use std::fmt::Display;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::vec::Vec;
@@ -30,33 +27,10 @@ pub struct Separate {
     /// Move files missing in destination
     #[arg(long)]
     r#move: Option<PathBuf>,
-}
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
-pub enum Mode {
-    Link,
-    Move,
-}
-
-#[derive(Debug)]
-pub struct BadMode;
-
-impl Display for BadMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("mode must be 'link' or 'move'")
-    }
-}
-
-impl FromStr for Mode {
-    type Err = BadMode;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "link" => Ok(Self::Link),
-            "move" => Ok(Self::Move),
-            _ => Err(BadMode),
-        }
-    }
+    /// Copy files missing in destination
+    #[arg(long)]
+    copy: Option<PathBuf>,
 }
 
 impl Separate {
@@ -69,8 +43,10 @@ impl Separate {
             .map(|p| p.canonicalize())
             .collect::<std::io::Result<Vec<PathBuf>>>()?;
 
-        if self.link.is_none() && self.r#move.is_none() {
-            bail!("Either --link or --move required");
+        // TODO: What happens if multiple are specified? Clean this up
+        // with a pattern match.
+        if self.link.is_none() && self.r#move.is_none() && self.copy.is_none() {
+            bail!("Either --link, --move, or --copy required");
         }
 
         // To avoid accidentally changing the source directory
@@ -82,6 +58,12 @@ impl Separate {
             }
         }
         if let Some(out) = &self.r#move {
+            std::fs::create_dir_all(out)?;
+            if out.canonicalize()?.starts_with(&self.src) {
+                bail!("May not place output within source");
+            }
+        }
+        if let Some(out) = &self.copy {
             std::fs::create_dir_all(out)?;
             if out.canonicalize()?.starts_with(&self.src) {
                 bail!("May not place output within source");
@@ -133,6 +115,13 @@ impl Separate {
                 let out_simplified = dunce::simplified(move_out);
                 println!("moving {} to {}", rel.display(), out_simplified.display());
                 std::fs::rename(&path, out_path)?;
+            }
+
+            if let Some(copy_out) = &self.copy {
+                let out_path = prepare_output_path(copy_out)?;
+                let out_simplified = dunce::simplified(copy_out);
+                println!("copying {} to {}", rel.display(), out_simplified.display());
+                std::fs::copy(&path, out_path)?;
             }
         }
 
