@@ -13,7 +13,7 @@ use photohash::index::ProcessFileResult;
 use photohash::model::FileInfo;
 use photohash::model::IMPath;
 use photohash::scan;
-use rand::RngCore;
+use rand::Rng;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Write;
