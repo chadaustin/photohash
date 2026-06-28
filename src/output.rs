@@ -1,9 +1,10 @@
 use crate::index::ProcessFileResult;
 use crate::u63::U63;
-use hex::ToHex;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
 use serde::Serializer;
+use std::fmt;
+use std::fmt::Write as _;
 use superconsole::SuperConsole;
 
 pub trait OutputMode {
@@ -26,16 +27,49 @@ impl OutputMode for StdoutMode {
 
 struct StdoutSequence;
 
+fn should_print_indexed_file(pfr: &ProcessFileResult) -> bool {
+    pfr.blake3_computed || pfr.image_metadata_computed
+}
+
+struct IndexedFile<'a>(&'a ProcessFileResult);
+
+struct LowerHexBytes<'a>(&'a [u8]);
+
+impl fmt::Display for LowerHexBytes<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        const HEX: &[char; 16] = &[
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+        ];
+        for byte in self.0 {
+            f.write_char(HEX[(byte >> 4) as usize])?;
+            f.write_char(HEX[(byte & 0xf) as usize])?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Display for IndexedFile<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let pfr = self.0;
+        let content_metadata = &pfr.content_metadata;
+        write!(
+            f,
+            "{} {:>8}K {}",
+            LowerHexBytes(&content_metadata.blake3),
+            content_metadata.file_info.size.get() / 1024,
+            &dunce::simplified(pfr.path.as_ref()).display(),
+        )
+    }
+}
+
+fn format_indexed_file(pfr: &ProcessFileResult) -> impl fmt::Display + '_ {
+    IndexedFile(pfr)
+}
+
 impl OutputSequence<'_> for StdoutSequence {
     fn file(&mut self, pfr: &ProcessFileResult) -> anyhow::Result<()> {
-        if pfr.blake3_computed || pfr.image_metadata_computed {
-            let content_metadata = &pfr.content_metadata;
-            println!(
-                "{} {:>8}K {}",
-                content_metadata.blake3.encode_hex::<String>(),
-                content_metadata.file_info.size.get() / 1024,
-                &dunce::simplified(pfr.path.as_ref()).display(),
-            );
+        if should_print_indexed_file(pfr) {
+            println!("{}", format_indexed_file(pfr));
         }
         Ok(())
     }
@@ -59,17 +93,13 @@ impl OutputMode for TtyMode {
 impl OutputSequence<'_> for TtySequence {
     fn file(&mut self, pfr: &ProcessFileResult) -> anyhow::Result<()> {
         let sc = &mut self.0;
-        let content_metadata = &pfr.content_metadata;
         use superconsole::components::Blank;
         use superconsole::Line;
         use superconsole::Lines;
-        if pfr.blake3_computed || pfr.image_metadata_computed {
-            sc.emit(Lines(vec![Line::unstyled(&format!(
-                "{} {:>8}K {}",
-                content_metadata.blake3.encode_hex::<String>(),
-                content_metadata.file_info.size.get() / 1024,
-                &dunce::simplified(pfr.path.as_ref()).display(),
-            ))?]));
+        if should_print_indexed_file(pfr) {
+            sc.emit(Lines(vec![Line::unstyled(
+                &format_indexed_file(pfr).to_string(),
+            )?]));
             sc.render(&Blank)?;
         }
         Ok(())
