@@ -52,8 +52,8 @@ jobs:
             Get-Content .\vcpkg-build.log -Tail 400
           }
 
-          if (Test-Path .\vcpkg) {
-            Get-ChildItem .\vcpkg -Recurse -File |
+          if (Test-Path .\target\vcpkg\buildtrees) {
+            Get-ChildItem .\target\vcpkg\buildtrees -Recurse -File |
               Where-Object { $_.Extension -in '.log', '.txt', '.out', '.err' } |
               Sort-Object FullName |
               ForEach-Object {
