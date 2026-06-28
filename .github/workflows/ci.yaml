@@ -41,10 +41,13 @@ jobs:
       - name: Install CMake 3.x
         shell: pwsh
         run: |
-          python -m pip install --user cmake==3.31.6
-          $pythonScripts = python -c "import site; print(site.USER_BASE + r'\Scripts')"
-          $pythonScripts | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & "$pythonScripts\cmake.exe" --version
+          python -m pip install cmake==3.31.6
+          $cmake = python -c "import shutil; print(shutil.which('cmake') or '')"
+          if (-not $cmake) {
+            throw "pip installed cmake, but cmake.exe was not found on PATH"
+          }
+          Split-Path $cmake | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $cmake --version
       - name: Install nasm
         run: choco install nasm -y
       - name: Install cargo-vcpkg
