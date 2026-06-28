@@ -82,6 +82,12 @@ FROM images
 WHERE blake3 = ?
 ";
 
+const GET_IMAGE_BLAKE3_HASHES: &str = "\
+SELECT blake3
+FROM images
+ORDER BY blake3
+";
+
 const ADD_IMAGE: &str = "\
 INSERT OR REPLACE INTO images
 (blake3, width, height, blockhash256, jpegrothash)
@@ -353,6 +359,19 @@ impl Database {
             blockhash256: row.get(2)?,
             jpegrothash: row.get(3)?,
         })
+    }
+
+    pub fn for_each_image_blake3_hash<F>(&self, mut f: F) -> anyhow::Result<()>
+    where
+        F: FnMut(Hash32) -> anyhow::Result<()>,
+    {
+        let mut stmt = self.conn().prepare(GET_IMAGE_BLAKE3_HASHES)?;
+        let rows = stmt.query_map((), |row| row.get::<_, Hash32>(0))?;
+
+        for row in rows {
+            f(row?)?;
+        }
+        Ok(())
     }
 
     pub fn get_extra_hashes(&mut self, blake3: &Hash32) -> anyhow::Result<Option<ExtraHashes>> {
