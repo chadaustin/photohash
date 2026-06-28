@@ -29,11 +29,15 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    env:
+      CMAKE_GENERATOR: Ninja
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Set up MSVC environment
+        uses: step-security/msvc-dev-cmd@v1
       - name: Install Python
         uses: actions/setup-python@v5
         with:
