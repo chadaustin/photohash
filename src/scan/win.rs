@@ -1,5 +1,6 @@
 use crate::model::FileInfo;
 use crate::model::IMPath;
+use crate::u63::U63;
 use ntapi::ntioapi::FileDirectoryInformation;
 use ntapi::ntioapi::NtCreateFile;
 use ntapi::ntioapi::NtQueryDirectoryFile;
@@ -483,19 +484,19 @@ pub fn windows_scan(
                         dirs_to_add.push((Some(child), child_full_path));
                     } else if let Some(utf8_full_path) = child_full_path.to_str() {
                         // TODO: return on Err?
+                        let file_info = U63::try_from(e.size)
+                            .map(|size| FileInfo {
+                                // TODO: We do technically have the
+                                // inode number if we call
+                                // NtQueryDirectoryFileEx with
+                                // FileIdBothDirectoryInformation.
+                                inode: U63::ZERO,
+                                size,
+                                mtime: e.mtime(),
+                            })
+                            .map_err(anyhow::Error::from);
                         meta_tx
-                            .send((
-                                utf8_full_path.to_string(),
-                                Ok(FileInfo {
-                                    // TODO: We do technically have the
-                                    // inode number if we call
-                                    // NtQueryDirectoryFileEx with
-                                    // FileIdBothDirectoryInformation.
-                                    inode: 0,
-                                    size: e.size,
-                                    mtime: e.mtime(),
-                                }),
-                            ))
+                            .send((utf8_full_path.to_string(), file_info))
                             .expect("failed to send");
                     }
                 }

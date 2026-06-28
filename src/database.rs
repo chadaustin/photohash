@@ -298,8 +298,8 @@ impl Database {
             for (path, file) in files {
                 stmt.add_file.execute((
                     path,
-                    &file.file_info.inode,
-                    &file.file_info.size,
+                    file.file_info.inode,
+                    file.file_info.size,
                     time_to_i64(&file.file_info.mtime),
                     &file.blake3,
                 ))?;
@@ -447,8 +447,8 @@ mod tests {
 
         let cm = ContentMetadata {
             file_info: FileInfo {
-                inode: 10,
-                size: 20,
+                inode: 10_u32.into(),
+                size: 20_u32.into(),
                 mtime: SystemTime::UNIX_EPOCH,
             },
             blake3: blake3::hash(b"foo").into(),
@@ -456,7 +456,7 @@ mod tests {
         db.add_files(&[(&path, &cm)])?;
 
         let result = db.get_file(&path)?.unwrap();
-        assert_eq!(10, result.file_info.inode);
+        assert_eq!(10, result.file_info.inode.get());
 
         Ok(())
     }

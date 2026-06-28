@@ -86,10 +86,10 @@ wild = "2.2.1"
 winapi = { version = "0.3.9", features = ["heapapi"] }
 
 [target.'cfg(windows)'.dependencies]
-rusqlite = { version = "0.40.1", features = ["fallible_uint", "bundled"] }
+rusqlite = { version = "0.40.1", features = ["bundled"] }
 
 [target.'cfg(not(windows))'.dependencies]
-rusqlite = { version = "0.40.1", features = ["fallible_uint"] }
+rusqlite = { version = "0.40.1" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.4"

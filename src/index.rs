@@ -271,8 +271,8 @@ mod tests {
         let db = Arc::new(Mutex::new(Database::open_memory()?));
         let pixel_semaphore = PixelSemaphore::test();
         let file_info = FileInfo {
-            inode: 1,
-            size: 2,
+            inode: 1_u32.into(),
+            size: 2_u32.into(),
             mtime: SystemTime::now(),
         };
 
@@ -298,8 +298,8 @@ mod tests {
         let db = Arc::new(Mutex::new(Database::open_memory()?));
         let pixel_semaphore = PixelSemaphore::test();
         let file_info = FileInfo {
-            inode: 1,
-            size: 2,
+            inode: 1_u32.into(),
+            size: 2_u32.into(),
             mtime: SystemTime::now(),
         };
 

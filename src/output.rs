@@ -1,4 +1,5 @@
 use crate::index::ProcessFileResult;
+use crate::u63::U63;
 use hex::ToHex;
 use serde::ser::SerializeSeq;
 use serde::Serialize;
@@ -32,7 +33,7 @@ impl OutputSequence<'_> for StdoutSequence {
             println!(
                 "{} {:>8}K {}",
                 content_metadata.blake3.encode_hex::<String>(),
-                content_metadata.file_info.size / 1024,
+                content_metadata.file_info.size.get() / 1024,
                 &dunce::simplified(pfr.path.as_ref()).display(),
             );
         }
@@ -66,7 +67,7 @@ impl OutputSequence<'_> for TtySequence {
             sc.emit(Lines(vec![Line::unstyled(&format!(
                 "{} {:>8}K {}",
                 content_metadata.blake3.encode_hex::<String>(),
-                content_metadata.file_info.size / 1024,
+                content_metadata.file_info.size.get() / 1024,
                 &dunce::simplified(pfr.path.as_ref()).display(),
             ))?]));
             sc.render(&Blank)?;
@@ -127,7 +128,7 @@ impl OutputSequence<'_> for JsonSequence<'_> {
 #[derive(Serialize)]
 struct JsonRecord {
     path: String,
-    size: u64,
+    size: U63,
     blake3: String,
     #[serde(flatten, skip_serializing_if = "Option::is_none")]
     extra_hashes: Option<JsonExtraHashes>,

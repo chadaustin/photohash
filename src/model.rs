@@ -1,3 +1,4 @@
+use crate::u63::U63;
 use std::borrow::Borrow;
 use std::fs::Metadata;
 #[cfg(unix)]
@@ -24,8 +25,8 @@ pub type IMPath = String;
 pub struct FileInfo {
     /// 0 on Windows for now. May contain file_index() when the API is
     /// stabilized.
-    pub inode: u64,
-    pub size: u64,
+    pub inode: U63,
+    pub size: U63,
     /// mtime in the local platform's units
     pub mtime: SystemTime,
 }
@@ -34,8 +35,8 @@ impl<T: Borrow<Metadata>> From<T> for FileInfo {
     fn from(metadata: T) -> FileInfo {
         let metadata = metadata.borrow();
         FileInfo {
-            inode: metadata.ino(),
-            size: metadata.len(),
+            inode: U63::try_from(metadata.ino()).expect("inode must fit in SQLite"),
+            size: U63::try_from(metadata.len()).expect("file size must fit in SQLite"),
             mtime: metadata
                 .modified()
                 .expect("requires a platform that supports mtime"),

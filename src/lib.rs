@@ -6,5 +6,6 @@ pub mod iopool;
 pub mod model;
 pub mod output;
 pub mod scan;
+pub mod u63;
 
 pub use database::Database;

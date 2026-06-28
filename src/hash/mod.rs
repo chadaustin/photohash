@@ -137,7 +137,7 @@ pub fn may_have_metadata<P: AsRef<Path>>(path: P, file_info: &FileInfo) -> bool 
         return false;
     }
     // Too large to decode.
-    if file_info.size > 40_000_000 {
+    if file_info.size.get() > 40_000_000 {
         return false;
     }
     is_jpeg(&path) || is_heic(&path)
