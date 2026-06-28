@@ -6,11 +6,13 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  test:
+  ubuntu:
     strategy:
       matrix:
         image:
+          - ubuntu-26.04
           - ubuntu-24.04
+          - ubuntu-22.04
           # TODO: Figure out how to install libheif on macOS.
           # - macos-latest # ARM
           # - macos-13 # Intel
