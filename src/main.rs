@@ -1,4 +1,5 @@
 use clap::Parser;
+use photohash::config::AppConfig;
 
 mod cmd;
 
@@ -9,6 +10,9 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 #[derive(Parser)]
 #[command(name = "photohash", about = "Index your files", version)]
 struct Args {
+    #[arg(short = 'c', value_name = "SECTION.KEY=VALUE", global = true)]
+    config: Vec<String>,
+
     #[command(subcommand)]
     command: cmd::MainCommand,
 }
@@ -16,5 +20,6 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opt = Args::parse_from(wild::args_os());
-    opt.command.run().await
+    let config = AppConfig::load(&opt.config)?;
+    opt.command.run(&config).await
 }

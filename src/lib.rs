@@ -1,4 +1,5 @@
 pub mod awake;
+pub mod config;
 pub mod database;
 pub mod hash;
 pub mod index;

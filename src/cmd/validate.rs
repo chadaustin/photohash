@@ -1,5 +1,6 @@
 use clap::Args;
 use photohash::awake;
+use photohash::config::AppConfig;
 use photohash::hash::compute_blake3;
 use photohash::hash::compute_image_hashes;
 use photohash::index::PixelSemaphore;
@@ -22,7 +23,7 @@ pub struct Validate {
 }
 
 impl Validate {
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub async fn run(mut self, config: &AppConfig) -> anyhow::Result<()> {
         self.srcs = self
             .srcs
             .iter()
@@ -32,7 +33,7 @@ impl Validate {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let dirs: Vec<&Path> = self.srcs.iter().map(|p| p.as_ref()).collect();
-        let results = do_validate(&db, &dirs)?;
+        let results = do_validate(config, &db, &dirs)?;
 
         let _awake = awake::keep_awake("validating files");
 
@@ -70,11 +71,12 @@ enum ValidationReason {
 }
 
 fn do_validate(
+    config: &AppConfig,
     db: &Arc<Mutex<Database>>,
     dirs: &[&Path],
 ) -> anyhow::Result<mpsc::Receiver<JoinHandle<anyhow::Result<Option<ValidateResult>>>>> {
     let scanner = scan::get_default_scan();
-    let path_meta_rx = scanner(dirs)?;
+    let path_meta_rx = scanner(&config.scan, dirs)?;
 
     let (validate_tx, validate_rx) = mpsc::channel();
 

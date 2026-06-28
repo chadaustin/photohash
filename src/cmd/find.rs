@@ -1,5 +1,6 @@
 use crate::cmd::diff::index_destination;
 use clap::Args;
+use photohash::config::AppConfig;
 use photohash::index::do_index;
 use photohash::Database;
 use std::collections::BTreeSet;
@@ -21,7 +22,7 @@ pub struct Find {
 }
 
 impl Find {
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub async fn run(mut self, config: &AppConfig) -> anyhow::Result<()> {
         self.src = self.src.canonicalize()?;
         self.dests = self
             .dests
@@ -30,8 +31,14 @@ impl Find {
             .collect::<std::io::Result<Vec<PathBuf>>>()?;
 
         let db = Arc::new(Mutex::new(Database::open()?));
-        let differences =
-            find_matching(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
+        let differences = find_matching(
+            config,
+            &db,
+            self.src.clone(),
+            self.dests.clone(),
+            self.exact,
+        )
+        .await?;
         for (path, matches) in differences.results {
             println!(
                 "{}{}",
@@ -57,6 +64,7 @@ struct FoundMatches {
 }
 
 async fn find_matching(
+    config: &AppConfig,
     db: &Arc<Mutex<Database>>,
     src: PathBuf,
     dests: Vec<PathBuf>,
@@ -65,11 +73,15 @@ async fn find_matching(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = do_index(db, &[&src], false)?;
+    let mut src_rx = do_index(&config.scan, db, &[&src], false)?;
 
     // Scan the destination(s) and build hash tables.
-    let index =
-        index_destination(db, &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>()).await?;
+    let index = index_destination(
+        config,
+        db,
+        &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>(),
+    )
+    .await?;
 
     let mut matches = FoundMatches::default();
     while let Some(pfr_future) = src_rx.recv().await {

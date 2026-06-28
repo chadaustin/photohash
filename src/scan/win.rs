@@ -1,3 +1,4 @@
+use crate::config::ScanConfig;
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use crate::u63::U63;
@@ -404,11 +405,12 @@ fn unicode_string(path: &[u16]) -> io::Result<UNICODE_STRING> {
 }
 
 pub fn windows_scan(
+    config: &ScanConfig,
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
 
-    let (meta_tx, meta_rx) = batch_channel::unbounded_sync();
+    let (meta_tx, meta_rx) = batch_channel::bounded_sync(config.meta_queue_depth);
 
     thread::Builder::new()
         .name("winscan".to_string())

@@ -1,6 +1,7 @@
 use crate::cmd::diff::compute_difference;
 use anyhow::bail;
 use clap::Args;
+use photohash::config::AppConfig;
 use photohash::Database;
 use std::path::Path;
 use std::path::PathBuf;
@@ -34,7 +35,7 @@ pub struct Separate {
 }
 
 impl Separate {
-    pub async fn run(mut self) -> anyhow::Result<()> {
+    pub async fn run(mut self, config: &AppConfig) -> anyhow::Result<()> {
         // We need to canonicalize to correctly strip_prefix later.
         self.src = self.src.canonicalize()?;
         self.dests = self
@@ -72,8 +73,14 @@ impl Separate {
 
         let db = Arc::new(Mutex::new(Database::open()?));
 
-        let differences =
-            compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
+        let differences = compute_difference(
+            config,
+            &db,
+            self.src.clone(),
+            self.dests.clone(),
+            self.exact,
+        )
+        .await?;
         if differences.missing.is_empty() {
             eprintln!("Nothing missing in destination");
             return Ok(());

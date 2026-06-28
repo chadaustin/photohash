@@ -1,4 +1,5 @@
 use clap::Args;
+use photohash::config::AppConfig;
 use photohash::index::do_index;
 use photohash::model::Hash32;
 use photohash::model::IMPath;
@@ -52,11 +53,17 @@ impl Dots {
 }
 
 impl Diff {
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
-        let difference =
-            compute_difference(&db, self.src.clone(), self.dests.clone(), self.exact).await?;
+        let difference = compute_difference(
+            config,
+            &db,
+            self.src.clone(),
+            self.dests.clone(),
+            self.exact,
+        )
+        .await?;
 
         if self.matches {
             Self::print_matches("Exact matches:", difference.matches_by_contents);
@@ -121,6 +128,7 @@ pub struct DestinationIndex {
 }
 
 pub async fn index_destination(
+    config: &AppConfig,
     db: &Arc<Mutex<Database>>,
     dests: &[&Path],
 ) -> anyhow::Result<DestinationIndex> {
@@ -128,7 +136,7 @@ pub async fn index_destination(
 
     eprint!("scanning destination...");
     let mut dots = Dots::new();
-    let mut dst_rx = do_index(db, dests, false)?;
+    let mut dst_rx = do_index(&config.scan, db, dests, false)?;
     while let Some(pfr_future) = dst_rx.recv().await {
         dots.increment();
 
@@ -170,6 +178,7 @@ pub struct Differences {
 }
 
 pub async fn compute_difference(
+    config: &AppConfig,
     db: &Arc<Mutex<Database>>,
     src: PathBuf,
     dests: Vec<PathBuf>,
@@ -178,11 +187,15 @@ pub async fn compute_difference(
     // Begin indexing the source in parallel.
     // TODO: If we could guarantee the output channel is sorted, we could
     // incrementally display results.
-    let mut src_rx = do_index(db, &[&src], false)?;
+    let mut src_rx = do_index(&config.scan, db, &[&src], false)?;
 
     // Scan the destination(s) and build hash tables.
-    let index =
-        index_destination(db, &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>()).await?;
+    let index = index_destination(
+        config,
+        db,
+        &dests.iter().map(|p| p.as_ref()).collect::<Vec<_>>(),
+    )
+    .await?;
 
     let mut differences = Differences::default();
     while let Some(pfr_future) = src_rx.recv().await {

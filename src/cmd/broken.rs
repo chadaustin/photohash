@@ -1,4 +1,5 @@
 use clap::Args;
+use photohash::config::AppConfig;
 use photohash::hash;
 use photohash::index::do_index;
 use photohash::Database;
@@ -15,14 +16,14 @@ pub struct Broken {
 }
 
 impl Broken {
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let dirs: Vec<_> = self.dirs.iter().map(|d| d.as_ref()).collect();
 
         let mut discrepancy_count: u64 = 0;
 
-        let mut metadata_rx = do_index(&db, &dirs, false)?;
+        let mut metadata_rx = do_index(&config.scan, &db, &dirs, false)?;
         while let Some(pfr_future) = metadata_rx.recv().await {
             let pfr = pfr_future.await??;
             if let Some(image_metadata) = pfr.image_metadata {

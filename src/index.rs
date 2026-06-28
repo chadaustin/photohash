@@ -1,3 +1,4 @@
+use crate::config::ScanConfig;
 use crate::hash;
 use crate::hash::update_content_hashes;
 use crate::hash::ContentHashSet;
@@ -86,12 +87,13 @@ impl PixelSemaphore {
 }
 
 pub fn do_index(
+    scan_config: &ScanConfig,
     db: &Arc<Mutex<Database>>,
     dirs: &[&Path],
     compute_extra_hashes: bool,
 ) -> anyhow::Result<mpsc::Receiver<JoinHandle<anyhow::Result<ProcessFileResult>>>> {
     let scanner = scan::get_default_scan();
-    let path_meta_rx = scanner(dirs)?;
+    let path_meta_rx = scanner(scan_config, dirs)?;
 
     let (metadata_tx, metadata_rx) = mpsc::channel(RESULT_CHANNEL_SIZE);
 
@@ -362,7 +364,13 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn index_single_file() -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open_memory()?));
-        let mut receiver = do_index(&db, &[&Path::new("tests/images/Moonlight.heic")], true)?;
+        let scan_config = ScanConfig::default();
+        let mut receiver = do_index(
+            &scan_config,
+            &db,
+            &[&Path::new("tests/images/Moonlight.heic")],
+            true,
+        )?;
         let pfr: ProcessFileResult = receiver.recv().await.expect("must be one item").await??;
         assert!(pfr.blake3_computed);
         assert_eq!(

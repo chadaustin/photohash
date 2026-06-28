@@ -1,3 +1,4 @@
+use crate::config::ScanConfig;
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
@@ -5,8 +6,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 const BATCH_SIZE: usize = 100;
-const PATH_CHANNEL_CAPACITY: usize = 100000;
-const META_CHANNEL_CAPACITY: usize = 100000;
 const IO_CONCURRENCY: usize = 4;
 
 fn canonicalize_all(paths: &[&Path]) -> anyhow::Result<Vec<PathBuf>> {
@@ -34,13 +33,14 @@ fn canonicalize_all(paths: &[&Path]) -> anyhow::Result<Vec<PathBuf>> {
  */
 
 fn walkdir_scan(
+    config: &ScanConfig,
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
-    let (tx, rx) = batch_channel::bounded(META_CHANNEL_CAPACITY);
+    let (tx, rx) = batch_channel::bounded(config.meta_queue_depth);
 
     tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, async move |tx| {
         // TODO: walk each path in parallel.
@@ -93,12 +93,13 @@ fn walkdir_scan(
  */
 
 fn jwalk_scan(
+    config: &ScanConfig,
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
 
-    let (path_tx, path_rx) = batch_channel::bounded(PATH_CHANNEL_CAPACITY);
-    let (meta_tx, meta_rx) = batch_channel::bounded(META_CHANNEL_CAPACITY);
+    let (path_tx, path_rx) = batch_channel::bounded(config.path_queue_depth);
+    let (meta_tx, meta_rx) = batch_channel::bounded(config.meta_queue_depth);
 
     for path in paths {
         let tx = path_tx.clone();
@@ -179,8 +180,10 @@ mod win;
 
 // Optimization opportunity: &[&Path] could avoid allocation at some
 // callsites as &mut dyn Iterator<Item = &Path>
-type ScanFn =
-    fn(&[&Path]) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>>;
+type ScanFn = fn(
+    &ScanConfig,
+    &[&Path],
+) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>>;
 
 #[cfg(windows)]
 pub fn get_all_scanners() -> &'static [(&'static str, ScanFn)] {

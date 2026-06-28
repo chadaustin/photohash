@@ -1,4 +1,5 @@
 use clap::Subcommand;
+use photohash::config::AppConfig;
 
 mod benchmark;
 mod broken;
@@ -28,18 +29,18 @@ pub enum MainCommand {
 }
 
 impl MainCommand {
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self, config: &AppConfig) -> anyhow::Result<()> {
         match self {
-            MainCommand::Benchmark(cmd) => cmd.run().await,
-            MainCommand::Broken(cmd) => cmd.run().await,
+            MainCommand::Benchmark(cmd) => cmd.run(config).await,
+            MainCommand::Broken(cmd) => cmd.run(config).await,
             MainCommand::Db(cmd) => cmd.run().await,
-            MainCommand::Diff(cmd) => cmd.run().await,
+            MainCommand::Diff(cmd) => cmd.run(config).await,
             MainCommand::Exif(cmd) => cmd.run().await,
-            MainCommand::Find(cmd) => cmd.run().await,
+            MainCommand::Find(cmd) => cmd.run(config).await,
             MainCommand::Hash(cmd) => cmd.run().await,
-            MainCommand::Index(cmd) => cmd.run().await,
-            MainCommand::Separate(cmd) => cmd.run().await,
-            MainCommand::Validate(cmd) => cmd.run().await,
+            MainCommand::Index(cmd) => cmd.run(config).await,
+            MainCommand::Separate(cmd) => cmd.run(config).await,
+            MainCommand::Validate(cmd) => cmd.run(config).await,
         }
     }
 }

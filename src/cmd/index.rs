@@ -1,5 +1,6 @@
 use clap::Args;
 use photohash::awake;
+use photohash::config::AppConfig;
 use photohash::index::do_index;
 use photohash::output::select_output_mode;
 use photohash::Database;
@@ -22,7 +23,7 @@ pub struct Index {
 }
 
 impl Index {
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(Database::open()?));
 
         let here = Path::new(".");
@@ -32,7 +33,7 @@ impl Index {
             self.dirs.iter().map(|p| p.as_ref()).collect()
         };
 
-        let mut metadata_rx = do_index(&db, &dirs, self.extra_hashes)?;
+        let mut metadata_rx = do_index(&config.scan, &db, &dirs, self.extra_hashes)?;
 
         let _awake = awake::keep_awake("indexing files");
 

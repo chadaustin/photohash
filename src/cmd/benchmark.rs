@@ -4,6 +4,7 @@ use chrono::Local;
 use clap::Args;
 use clap::Subcommand;
 use futures::future::join_all;
+use photohash::config::AppConfig;
 use photohash::database::Database;
 use photohash::hash::get_hasher;
 use photohash::hash::ContentHashSet;
@@ -36,14 +37,14 @@ pub enum Benchmark {
 }
 
 impl Benchmark {
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         match self {
             Benchmark::Walkdir(cmd) => cmd.run().await,
             Benchmark::Jwalk(cmd) => cmd.run().await,
             Benchmark::JwalkParStat(cmd) => cmd.run().await,
-            Benchmark::Scan(cmd) => cmd.run().await,
-            Benchmark::Index(cmd) => cmd.run().await,
-            Benchmark::Validate(cmd) => cmd.run().await,
+            Benchmark::Scan(cmd) => cmd.run(config).await,
+            Benchmark::Index(cmd) => cmd.run(config).await,
+            Benchmark::Validate(cmd) => cmd.run(config).await,
             Benchmark::Hashes(cmd) => cmd.run().await,
         }
     }
@@ -215,7 +216,7 @@ pub struct Scan {
 }
 
 impl Scan {
-    async fn run(&self) -> anyhow::Result<()> {
+    async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let scan = self
             .scanner
             .as_ref()
@@ -233,7 +234,7 @@ impl Scan {
 
         let mut metadata_results = 0;
 
-        let rx = scan(&[&self.path])?;
+        let rx = scan(&config.scan, &[&self.path])?;
         loop {
             let results = rx.recv_batch(self.batch).await;
             if results.is_empty() {
@@ -260,7 +261,7 @@ pub struct Index {
 }
 
 impl Index {
-    async fn run(&self) -> anyhow::Result<()> {
+    async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let db = Arc::new(Mutex::new(if self.real_db {
             Database::open()?
         } else {
@@ -271,7 +272,7 @@ impl Index {
 
         let mut pfr_results = 0;
 
-        let mut rx = do_index(&db, &[&self.path], false)?;
+        let mut rx = do_index(&config.scan, &db, &[&self.path], false)?;
         while let Some(jh) = rx.recv().await {
             let _: ProcessFileResult = jh.await.unwrap()?;
             pfr_results += 1;
@@ -289,16 +290,17 @@ pub struct Validate {
 }
 
 impl Validate {
-    async fn run(&self) -> anyhow::Result<()> {
+    async fn run(&self, config: &AppConfig) -> anyhow::Result<()> {
         let scanners = scan::get_all_scanners();
         let mut results = Vec::with_capacity(scanners.len());
         let mut all_scanners = HashSet::new();
         for (scanner_name, scan) in scanners {
             all_scanners.insert(scanner_name);
             let path = self.path.clone();
+            let scan_config = config.scan.clone();
             results.push(tokio::spawn(async move {
                 let mut metadata = HashMap::new();
-                let rx = scan(&[&path])?;
+                let rx = scan(&scan_config, &[&path])?;
                 while let Some((path, meta)) = rx.recv().await {
                     //eprintln!("{}: {}", scanner_name, path);
                     metadata.insert(path, meta);
