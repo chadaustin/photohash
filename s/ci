@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+cd "${BASH_SOURCE%/*}"/..
+
+cargo check --all-targets
+cargo test
+
+cargo check --release --all-targets
+cargo test --release
