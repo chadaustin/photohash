@@ -59,6 +59,7 @@ jobs:
       - name: Build vcpkg dependencies
         shell: pwsh
         run: |
+          Remove-Item Env:VCPKG_ROOT -ErrorAction SilentlyContinue
           cmake --version
           cargo vcpkg build 2>&1 | Tee-Object -FilePath vcpkg-build.log
           exit $LASTEXITCODE
@@ -81,4 +82,7 @@ jobs:
               }
           }
       - name: Build project
-        run: cargo build
+        shell: pwsh
+        run: |
+          Remove-Item Env:VCPKG_ROOT -ErrorAction SilentlyContinue
+          cargo build
