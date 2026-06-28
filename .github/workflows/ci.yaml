@@ -34,6 +34,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install CMake 3.x
+        shell: pwsh
+        run: |
+          python -m pip install --user cmake==3.31.6
+          $pythonScripts = python -c "import site; print(site.USER_BASE + r'\Scripts')"
+          $pythonScripts | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$pythonScripts\cmake.exe" --version
       - name: Install nasm
         run: choco install nasm -y
       - name: Install cargo-vcpkg
@@ -41,6 +52,7 @@ jobs:
       - name: Build vcpkg dependencies
         shell: pwsh
         run: |
+          cmake --version
           cargo vcpkg build 2>&1 | Tee-Object -FilePath vcpkg-build.log
           exit $LASTEXITCODE
       - name: Dump vcpkg logs on failure
@@ -54,11 +66,11 @@ jobs:
 
           if (Test-Path .\target\vcpkg\buildtrees) {
             Get-ChildItem .\target\vcpkg\buildtrees -Recurse -File |
-              Where-Object { $_.Extension -in '.log', '.txt', '.out', '.err' } |
+              Where-Object { $_.Name -match '^(stdout|stderr|config-.+-(out|err))-.+\.log$' } |
               Sort-Object FullName |
               ForEach-Object {
                 Write-Host "===== $($_.FullName) ====="
-                Get-Content $_.FullName -Tail 200
+                Get-Content $_.FullName -Tail 300
               }
           }
       - name: Build project
