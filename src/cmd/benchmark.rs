@@ -407,7 +407,7 @@ impl Hashes {
             hasher.update(&buf);
             hashed_bytes += BUF_SIZE;
         }
-        hasher.finalize();
+        _ = hasher.finalize();
         let end = Instant::now();
         // Safety: end - start cannot be zero.
         (hashed_bytes as f64) / (end - start).as_secs_f64()
