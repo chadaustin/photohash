@@ -27,6 +27,9 @@ impl OutputMode for StdoutMode {
 
 struct StdoutSequence;
 
+// 12 hex characters is enough to uniquely identify hashes in the author's NAS.
+const INDEXED_FILE_HASH_HEX_CHARS: usize = 12;
+
 fn should_print_indexed_file(pfr: &ProcessFileResult) -> bool {
     pfr.blake3_computed || pfr.image_metadata_computed
 }
@@ -40,9 +43,19 @@ impl fmt::Display for LowerHexBytes<'_> {
         const HEX: &[char; 16] = &[
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
         ];
+        let mut nibbles = 0;
         for byte in self.0 {
+            if nibbles == INDEXED_FILE_HASH_HEX_CHARS {
+                break;
+            }
             f.write_char(HEX[(byte >> 4) as usize])?;
+            nibbles += 1;
+
+            if nibbles == INDEXED_FILE_HASH_HEX_CHARS {
+                break;
+            }
             f.write_char(HEX[(byte & 0xf) as usize])?;
+            nibbles += 1;
         }
         Ok(())
     }
