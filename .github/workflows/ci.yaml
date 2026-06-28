@@ -25,7 +25,7 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install Ubuntu packages
-        run: sudo apt install -y libheif-dev libsqlite3-dev nasm libheif1
+        run: sudo apt install -y libheif-dev libsqlite3-dev nasm libheif-plugin-libde265
       - run: cargo test
 
   build-windows:
