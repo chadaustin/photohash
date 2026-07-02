@@ -9,6 +9,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 const SYSTEM_CONFIG_PATH: &str = "/etc/photohash/config.toml";
+const DEFAULT_IGNORE_FILENAME_PATTERNS: &[&str] = &[".picasa.ini", "._*"];
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -21,6 +22,7 @@ pub struct AppConfig {
 pub struct ScanConfig {
     pub path_queue_depth: usize,
     pub meta_queue_depth: usize,
+    pub ignore_filename_patterns: Vec<String>,
 }
 
 impl Default for ScanConfig {
@@ -28,6 +30,10 @@ impl Default for ScanConfig {
         Self {
             path_queue_depth: 10_000,
             meta_queue_depth: 10_000,
+            ignore_filename_patterns: DEFAULT_IGNORE_FILENAME_PATTERNS
+                .iter()
+                .map(|pattern| pattern.to_string())
+                .collect(),
         }
     }
 }
@@ -99,4 +105,17 @@ fn parse_value(value: &str) -> Value {
         return Value::from(value);
     }
     Value::from(value.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scan_config_defaults_ignore_photo_sidecars() {
+        assert_eq!(
+            vec![".picasa.ini".to_owned(), "._*".to_owned()],
+            ScanConfig::default().ignore_filename_patterns
+        );
+    }
 }

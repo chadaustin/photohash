@@ -2547,6 +2547,7 @@ dependencies = [
  "dunce",
  "enumset",
  "futures",
+ "glob",
  "hex",
  "image",
  "image_hasher",

@@ -409,6 +409,7 @@ pub fn windows_scan(
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = super::canonicalize_all(paths)?;
+    let ignore_filename_patterns = super::compile_ignore_filename_patterns(config)?;
 
     let (meta_tx, meta_rx) = batch_channel::bounded_sync(config.meta_queue_depth);
 
@@ -423,6 +424,11 @@ pub fn windows_scan(
                 if path.is_dir() {
                     queue.push_back((None, path));
                 } else {
+                    if path.file_name().is_some_and(|name| {
+                        super::is_ignored_filename(&ignore_filename_patterns, name)
+                    }) {
+                        continue;
+                    }
                     let Some(path) = path.to_str() else {
                         eprintln!("{} not unicode", path.display());
                         // TODO: We only support UTF-8 paths for now.
@@ -477,7 +483,14 @@ pub fn windows_scan(
                     // Construct a full child path. I hate that this
                     // has two allocations. I haven't found a way to
                     // bypass that.
-                    let child_full_path = Path::join(Path::new(path), OsString::from_wide(e.name));
+                    let child_name = OsString::from_wide(e.name);
+                    if !e.is_dir()
+                        && super::is_ignored_filename(&ignore_filename_patterns, &child_name)
+                    {
+                        continue;
+                    }
+
+                    let child_full_path = Path::join(Path::new(path), child_name);
                     //eprintln!("child_full_path {}", child_full_path.display());
 
                     if e.is_dir() {

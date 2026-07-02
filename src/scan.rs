@@ -2,8 +2,11 @@ use crate::config::ScanConfig;
 use crate::model::FileInfo;
 use crate::model::IMPath;
 use anyhow::Context;
+use glob::Pattern;
+use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 const BATCH_SIZE: usize = 100;
 const IO_CONCURRENCY: usize = 4;
@@ -16,6 +19,23 @@ fn canonicalize_all(paths: &[&Path]) -> anyhow::Result<Vec<PathBuf>> {
                 .with_context(|| format!("failed to canonicalize {}", path.display()))
         })
         .collect()
+}
+
+fn compile_ignore_filename_patterns(config: &ScanConfig) -> anyhow::Result<Vec<Pattern>> {
+    config
+        .ignore_filename_patterns
+        .iter()
+        .map(|pattern| {
+            Pattern::new(pattern)
+                .with_context(|| format!("invalid scan.ignore_filename_patterns glob {pattern:?}"))
+        })
+        .collect()
+}
+
+pub(crate) fn is_ignored_filename(patterns: &[Pattern], file_name: &OsStr) -> bool {
+    patterns
+        .iter()
+        .any(|pattern| pattern.matches_path(Path::new(file_name)))
 }
 
 /*
@@ -37,6 +57,7 @@ fn walkdir_scan(
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
+    let ignore_filename_patterns = Arc::new(compile_ignore_filename_patterns(config)?);
 
     // Bounding this pool would allow relinquishing this thread when
     // crawl has gotten too far ahead.
@@ -64,6 +85,9 @@ fn walkdir_scan(
                     }
                 };
                 if !e.file_type().is_file() {
+                    continue;
+                }
+                if is_ignored_filename(&ignore_filename_patterns, e.file_name()) {
                     continue;
                 }
                 let Some(path) = e.path().to_str().map(String::from) else {
@@ -97,12 +121,14 @@ fn jwalk_scan(
     paths: &[&Path],
 ) -> anyhow::Result<batch_channel::Receiver<(IMPath, anyhow::Result<FileInfo>)>> {
     let paths = canonicalize_all(paths)?;
+    let ignore_filename_patterns = Arc::new(compile_ignore_filename_patterns(config)?);
 
     let (path_tx, path_rx) = batch_channel::bounded(config.path_queue_depth);
     let (meta_tx, meta_rx) = batch_channel::bounded(config.meta_queue_depth);
 
     for path in paths {
         let tx = path_tx.clone();
+        let ignore_filename_patterns = ignore_filename_patterns.clone();
         tokio::spawn(tx.autobatch_or_cancel(BATCH_SIZE, async move |tx| {
             // No same_file_system option. https://github.com/Byron/jwalk/issues/27
             for entry in jwalk::WalkDir::new(&path)
@@ -128,6 +154,9 @@ fn jwalk_scan(
                     }
                 };
                 if !e.file_type().is_file() {
+                    continue;
+                }
+                if is_ignored_filename(&ignore_filename_patterns, e.file_name()) {
                     continue;
                 }
                 let Some(path) = e.path().to_str().map(String::from) else {
@@ -226,4 +255,75 @@ pub fn get_default_scan() -> ScanFn {
     // as being faster.  It's possible jwalk would be faster on every
     // unix, especially macOS, but we should check.
     walkdir_scan
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+    use std::fs;
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
+
+    fn patterns(patterns: &[&str]) -> Vec<Pattern> {
+        patterns
+            .iter()
+            .map(|pattern| Pattern::new(pattern).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn ignored_filename_patterns_match_file_names() {
+        let patterns = patterns(&[".picasa.ini", "._*"]);
+
+        assert!(is_ignored_filename(&patterns, OsStr::new(".picasa.ini")));
+        assert!(is_ignored_filename(&patterns, OsStr::new("._IMG_0012.JPG")));
+        assert!(!is_ignored_filename(&patterns, OsStr::new("IMG_0012.JPG")));
+        assert!(!is_ignored_filename(
+            &patterns,
+            OsStr::new("album.picasa.ini")
+        ));
+    }
+
+    #[test]
+    fn invalid_ignored_filename_pattern_errors() {
+        let config = ScanConfig {
+            ignore_filename_patterns: vec!["[".to_owned()],
+            ..ScanConfig::default()
+        };
+
+        assert!(compile_ignore_filename_patterns(&config).is_err());
+    }
+
+    #[tokio::test]
+    async fn scanners_skip_ignored_filenames() -> anyhow::Result<()> {
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "photohash-scan-ignore-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir(&dir)?;
+        fs::write(dir.join(".picasa.ini"), b"ignored")?;
+        fs::write(dir.join("._IMG_0012.JPG"), b"ignored")?;
+        fs::write(dir.join("IMG_0012.JPG"), b"indexed")?;
+
+        let config = ScanConfig::default();
+        for (scanner_name, scanner) in get_all_scanners() {
+            let rx = scanner(&config, &[&dir])?;
+            let mut paths = Vec::new();
+            while let Some((path, metadata)) = rx.recv().await {
+                metadata?;
+                paths.push(path);
+            }
+
+            assert_eq!(
+                vec![dir.join("IMG_0012.JPG").to_string_lossy().into_owned()],
+                paths,
+                "{scanner_name}"
+            );
+        }
+
+        fs::remove_dir_all(dir)?;
+        Ok(())
+    }
 }
