@@ -15,6 +15,7 @@ mod heic;
 mod jpeg;
 
 const READ_SIZE: usize = 65536;
+const MAX_HASH_ATTEMPTS: usize = 3;
 
 const USE_IMAGE_HASHER_BLOCKHASH: bool = false;
 
@@ -240,6 +241,24 @@ async fn apply_content_hashes(
     path: PathBuf,
     which: ContentHashSet,
 ) -> anyhow::Result<()> {
+    for _ in 0..MAX_HASH_ATTEMPTS {
+        if let Some(attempt_result) = compute_content_hashes_once(&path, which).await? {
+            merge_content_hashes(result, attempt_result, which);
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!(
+        "file changed while hashing after {MAX_HASH_ATTEMPTS} attempts: {}",
+        path.display()
+    )
+}
+
+async fn compute_content_hashes_once(
+    path: &Path,
+    which: ContentHashSet,
+) -> anyhow::Result<Option<ContentHashes>> {
+    let mut result = ContentHashes::default();
     let mut blake3_hasher: Option<blake3::Hasher> = None;
     let mut md5_hasher: Option<md5::Md5> = None;
     let mut sha1_hasher: Option<sha1::Sha1> = None;
@@ -255,21 +274,18 @@ async fn apply_content_hashes(
             target: result.blake3.get_or_insert_default(),
         });
     }
-
     if which.contains(ContentHashType::MD5) {
         hashers.push(Hasher {
             digest: md5_hasher.get_or_insert_default(),
             target: result.extra_hashes.md5.get_or_insert_default(),
         });
     }
-
     if which.contains(ContentHashType::SHA1) {
         hashers.push(Hasher {
             digest: sha1_hasher.get_or_insert_default(),
             target: result.extra_hashes.sha1.get_or_insert_default(),
         });
     }
-
     if which.contains(ContentHashType::SHA256) {
         hashers.push(Hasher {
             digest: sha256_hasher.get_or_insert_default(),
@@ -277,15 +293,15 @@ async fn apply_content_hashes(
         });
     }
 
-    match select_worker_pool(which) {
+    let (metadata_before, metadata_after) = match select_worker_pool(which) {
         WorkerPool::Tokio => {
             let mut file = tokio::fs::File::open(path).await?;
+            let metadata_before = FileInfo::from(file.metadata().await?);
             // TODO: 64KiB * (100 MB/s) = 655 microseconds, perhaps
             // below scheduling quanta. Consider a larger value.
             let mut buffer = [0u8; READ_SIZE];
             loop {
-                let read = file.read(&mut buffer);
-                let n = read.await?;
+                let n = file.read(&mut buffer).await?;
                 if n == 0 {
                     break;
                 }
@@ -296,11 +312,13 @@ async fn apply_content_hashes(
             for mut h in hashers {
                 h.finalize();
             }
-            Ok(())
+            let metadata_after = FileInfo::from(file.metadata().await?);
+            (metadata_before, metadata_after)
         }
         WorkerPool::IO => {
             iopool::run_in_io_pool_local(|| {
                 let mut file = std::fs::File::open(path)?;
+                let metadata_before = FileInfo::from(file.metadata()?);
                 let mut buffer = [0u8; READ_SIZE];
                 loop {
                     let n = file.read(&mut buffer)?;
@@ -314,10 +332,32 @@ async fn apply_content_hashes(
                 for mut h in hashers {
                     h.finalize();
                 }
-                Ok(())
+                let metadata_after = FileInfo::from(file.metadata()?);
+                Ok::<_, std::io::Error>((metadata_before, metadata_after))
             })
-            .await
+            .await?
         }
+    };
+
+    Ok((metadata_before == metadata_after).then_some(result))
+}
+
+fn merge_content_hashes(
+    result: &mut ContentHashes,
+    computed: ContentHashes,
+    which: ContentHashSet,
+) {
+    if which.contains(ContentHashType::BLAKE3) {
+        result.blake3 = computed.blake3;
+    }
+    if which.contains(ContentHashType::MD5) {
+        result.extra_hashes.md5 = computed.extra_hashes.md5;
+    }
+    if which.contains(ContentHashType::SHA1) {
+        result.extra_hashes.sha1 = computed.extra_hashes.sha1;
+    }
+    if which.contains(ContentHashType::SHA256) {
+        result.extra_hashes.sha256 = computed.extra_hashes.sha256;
     }
 }
 

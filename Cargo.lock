@@ -2517,6 +2517,7 @@ dependencies = [
  "sha2 0.11.0",
  "static_assertions",
  "superconsole",
+ "tempfile",
  "thiserror 2.0.19",
  "tokio",
  "tracing",

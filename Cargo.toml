@@ -37,6 +37,7 @@ vcpkg = "0.2.15"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports"] }
+tempfile = "3.23.0"
 
 [[bench]]
 name = "databasebench"
