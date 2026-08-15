@@ -303,6 +303,7 @@ mod tests {
             std::process::id()
         ));
         fs::create_dir(&dir)?;
+        let dir = dir.canonicalize()?;
         fs::write(dir.join(".picasa.ini"), b"ignored")?;
         fs::write(dir.join("._IMG_0012.JPG"), b"ignored")?;
         fs::write(dir.join("IMG_0012.JPG"), b"indexed")?;
